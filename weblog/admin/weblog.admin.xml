@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+	<systemtype>0</systemtype>
+    <name>weblogmodule</name>
+    <menuitem>«Блог»</menuitem>
+    <description>Управление разделом «Блог»</description>
+    <version>1.4</version>
+    <module_library>admin/libs/modules/weblogmodule/weblog.admin.lib</module_library>
+    <module_include>admin/libs/modules/weblogmodule/weblog.admin.inc</module_include>
+    <startaction>admweblog</startaction>
+    <startfunction>weblogmodule::show_weblog_startpage($env_params[0],sessiontools::get_login_bysesid($env_params[0]),0);</startfunction>
+    <configuration>
+        <tankfile>conf/system/weblog.tnk</tankfile>
+        <indexfile/>
+        <datafile/>
+    </configuration>
+</module>

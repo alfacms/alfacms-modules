@@ -1,0 +1,284 @@
+﻿package feedbackmodule;
+BEGIN {}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                               	|
+#  |  Модуль управления обратной связью			 	|
+#  |  Целевая CMS: alfaCMS, v2.6					|
+#  |  Последнее обновление: 2014-02-06				|
+#  |                                               	|
+#  |  История изменений:                          	|
+#  |  2014-02-06	Создание и отладка				|
+#  |			                          			|
+#  +------------------------------------------------+
+
+#----------------------------------------------------------------------------
+
+my $MODULE_NAME = "feedbackmodule";
+my $MODULE_DESCR = "Быстрая заявка";
+
+#----------------------------------------------------------------------------
+
+# +-------------------------------------------------+
+# |		   											|
+# | Получить статус модуля (включен или выключен) 	|
+# |													|
+# +-------------------------------------------------+
+
+sub get_power_status_for_module {
+ my $file_to_parse = "conf/system/install.tnk";
+ if (-e $file_to_parse) 
+  {
+  open(CFGFH,"<$file_to_parse");
+  my @filecontent = <CFGFH>;
+  close(CFGFH);
+  for(my $admplinx = 0; $admplinx <= $#filecontent; $admplinx++)
+   {
+  	my @tmp = split (/\|/,$filecontent[$admplinx]);
+  	if ($tmp[2] eq $MODULE_NAME) {return $tmp[4];}
+   }
+  }
+ return;	
+}
+
+#----------------------------------------------------------------------------
+
+# +---------------------------------------------+
+# |		   										|
+# | Промежуточная функция вывода записей из CMS 	|
+# |												|
+# +---------------------------------------------+
+
+sub show_feedback_clientpage {
+my $pageaction = $_[0];
+if (-e "conf/config/template.html")
+ {
+ open(FCFH,"<conf/config/template.html");
+ @scheme = <FCFH>;
+ my $cnt = 0;
+ while($cnt<=$#scheme) {
+   
+   # SEO #
+   if ($scheme[$cnt] =~ /\%page_title\%/) {my $title = $MODULE_DESCR; $scheme[$cnt] =~ s/\%page_title\%/$title/;}
+   if ($scheme[$cnt] =~ /\%metadesc\%/) {my $metadesc = "Форма обратной связи"; $scheme[$cnt] =~ s/\%metadesc\%/$metadesc/;}
+   if ($scheme[$cnt] =~ /\%metakeys\%/) {my $metakeys = "обратная связь, быстрая заявка, вопрос менеджеру"; $scheme[$cnt] =~ s/\%metakeys\%/$metakeys/;}
+   # SEO #   
+   
+   $scheme[$cnt] = pagesmodule::fill_common_cms_tags($scheme[$cnt],$pageaction);
+   if ($scheme[$cnt] =~ /\%content\%/) {my $content = feedbackmodule::_inner_feedback_form(@_); $scheme[$cnt] =~ s/\%content\%/$content/;}
+   print $scheme[$cnt];
+   $cnt++;
+  }
+ close FCFH;
+ }
+ else {print "<b>$MODULE_NAME:</b> in fuction show_interest_startpage() - conf/config/template.html not found!";}
+}
+
+#----------------------------------------------------------------------------
+
+# +-----------------------------+
+# |		   						|
+# | Добавление сообщения в БД 	|
+# |								|
+# +-----------------------------+
+
+# $mess,$email,$fio,$subj
+
+sub _inner_feedback_add_to {
+ my $messID = time;
+ my $mess_ = $_[0];
+ my $email_ = $_[1];
+ my $fio_ = $_[2];
+ my $subj_ = $_[3];
+ my $type_ = $_[4];
+
+ $mess_ =~ s/[\r\n]+/\<br\>/g;
+ $email_ =~ s/[\r\n]+/\<br\>/g;
+ $fio_ =~ s/[\r\n]+/\<br\>/g;
+ $subj_ =~ s/[\r\n]+/\<br\>/g;
+
+ if (-e "conf/system/feedback.tnk") {open (TIFH,"+<conf/system/feedback.tnk");}
+    else {open (TIFH,">conf/system/feedback.tnk");}
+ my @indexes = <TIFH>;
+ my $date = feedbackmodule::_inner_feedback_date_format();
+ push(@indexes,"$messID|$messID|$date|$type_|$fio_|$email_|$subj_|$mess_\r\n");
+ seek(TIFH,0,0);
+ flock(TIFH,2);
+ print TIFH @indexes;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH);
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------+
+#  |                       	|
+#  |  Форматированная дата  	|
+#  |			           	|
+#  +------------------------+
+
+
+sub _inner_feedback_date_format {
+ my $date = localtime;
+ $date =~ s/[\.\:\,]//g;
+ $date =~ s/[\s]+/ /g;
+ my @date_array = split (/ /,$date);
+ @date_array = ($date_array[2],$date_array[1],$date_array[4]);
+ if ($date_array[1] eq 'Jan') {$date_array[1] = 'Январь'}
+ if ($date_array[1] eq 'Feb') {$date_array[1] = 'Февраль'}
+ if ($date_array[1] eq 'Mar') {$date_array[1] = 'Март'}
+ if ($date_array[1] eq 'Apr') {$date_array[1] = 'Апрель'}
+ if ($date_array[1] eq 'May') {$date_array[1] = 'Май'}
+ if ($date_array[1] eq 'Jun') {$date_array[1] = 'Июнь'}
+ if ($date_array[1] eq 'Jul') {$date_array[1] = 'Июль'}
+ if ($date_array[1] eq 'Aug') {$date_array[1] = 'Август'}
+ if ($date_array[1] eq 'Sep') {$date_array[1] = 'Сентябрь'}
+ if ($date_array[1] eq 'Oct') {$date_array[1] = 'Октябрь'}
+ if ($date_array[1] eq 'Nov') {$date_array[1] = 'Ноябрь'}
+ if ($date_array[1] eq 'Dec') {$date_array[1] = 'Декабрь'}
+ return "$date_array[0] $date_array[1], $date_array[2]";
+}
+
+#----------------------------------------------------------------------------
+
+# +-----------------------------------------+
+# |		   									|
+# | Универсальная функция отправки email 	|
+# |											|
+# +-----------------------------------------+
+
+sub _inner_feedback_simple_send_message_uni
+{
+ use MIME::Base64;
+ my $sendaddr = $_[0];
+ my $mess = "=?UTF-8?B?".encode_base64("$_[1]");
+ my $subj = "=?UTF-8?B?".encode_base64("С сайта $ENV{SERVER_NAME} пользователь $_[3] отправил запрос")."?=";
+ my $from = "=?UTF-8?B?".encode_base64("$_[3]")."?= <$_[4]>";
+ $from =~ s/[\r\n]+//g;
+ $subj =~ s/[\r\n]+//g;
+ unless (open(MAIL,"|/usr/sbin/sendmail -t"))
+ {
+  $error = "Sendmail openning error!, $!";
+  return(-1);
+ }
+ print MAIL "To: $sendaddr\n";
+ print MAIL "From: $from\n";
+ print MAIL "Subject: $subj\n";
+ print MAIL "MIME-Version: 1.0\nContent-Type: text/plain; charset=\"UTF-8\"\n\n";
+ #print MAIL $_[1];
+ print MAIL "С сайта $ENV{SERVER_NAME} пользователь отправил запрос!\n\nКонтактное лицо: $_[3]\nEmail: $_[4]\nТелефон: $_[2]\n\nТекст запроса:\n--------------\n\n$_[1]\n\n\-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\nПисьмо сгенерировано автоматически системой управления сайтом alfaCMS v2.5";
+  unless (close(MAIL))
+ {
+  $error = "Could not close SENDMAIL!, $!";
+  return(-1);
+  }
+ return(0);
+}
+
+#----------------------------------------------------------------------------
+
+# +-------------------------------------------------+
+# |		   											|
+# | Локальная форма обратной связи - быстрая заявка	|
+# |													|
+# +-------------------------------------------------+
+
+sub _inner_feedback_form {
+my $FB_Content = '';
+my $header = qq~<p class="popup_header">$MODULE_DESCR</p>~;
+if ($_[$#_] != 1) {
+ my $random = rand();
+ my @tmp = split (/\./,$random);
+ my $hexed_code = feedbackmodule::string_to_hexstring($tmp[1]);
+ my $codetitle = 'Код защиты от спама:';
+ my @field_title = ('Фамилия, имя, отчество:','Ваш e-mail:','Телефон:','Текст заявки:');
+ 
+ if ($#_ > 0) { 
+  my @field_data = @_[0...3];
+  for (my $i=0; $i <= $#field_title; $i++) {
+   if ($field_data[$i] eq '') {$field_title[$i] = qq~<font color="#ff0000">$field_title[$i]</font>~;}
+  }
+  if ($_[$#_] == 2) {$codetitle = qq~<font color="#ff0000">$codetitle</font>~;}
+ }
+
+ $FB_Content = qq~
+	$header
+	<form method=post action="$ENV{SCRIPT_NAME}?action=sendmess&amp;form=$_[4]" style="margin:0">
+	<input type=hidden name=formtype value="supportrequest">
+	<table cellspacing=0 cellpadding=2 border=0 width="100%">\n
+	<tr>
+	<td class=standart_text>$field_title[0]</td></tr>\n
+	<tr><td class=qr_standart_text><input type=text name=fio value="$_[0]" class=input style=width:200></td></tr>\n
+	<tr><td class=standart_text>$field_title[1]</td></tr>\n
+	<tr><td class=qr_standart_text><input type=text name=email value="$_[1]" class=input style=width:200></td></tr>\n
+	<tr><td class=standart_text>$field_title[2]</td></tr>\n
+	<tr><td class=qr_standart_text><input type=text name=subject value="$_[2]" class=input style=width:200></td></tr>\n	
+	<tr><td class=standart_text>$field_title[3]</td></tr>\n
+	<tr><td class=qr_standart_text><textarea rows=8 cols=5 name=message class=input style="width:100%">$_[3]</textarea></td></tr>\n
+	<tr><td class=standart_text>$codetitle</td></tr>
+	<tr><td class=qr_standart_text><img src="$ENV{SCRIPT_NAME}?action=fbgetcode&amp;val=$hexed_code" class=captcha width=102 height=32 border=0 alt=""></td></tr>
+	<tr><td class=qr_standart_text><input type="hidden" name="code1" value="$hexed_code"><input type="text" class=input name="code2" size="26" value=""></td></tr>
+	<tr><td class=qr_standart_text><input class=button type=Reset value="Очистить" style=width:90>&nbsp;<input type=submit value="Отправить" class=button style=width:90>&nbsp;</td></tr></table></form>
+	<p style="color:A0A0A0" class=qr_standart_text><small><small>Все поля обязательны для заполнения!</small></small></p>
+ ~;
+ }
+ else 
+ {
+  $FB_Content = qq~$header<p class=standart_text align=left><span class=status>Ваша заявка успешно отправлена!</span><br>Наш менеджер свяжется с Вами в ближайшее время.</p><p>&nbsp;</p>~;
+ }
+return $FB_Content;
+}
+
+#----------------------------------------------------------------------------
+
+# +-------------------------------------------------+
+# |					          						|
+# | Представление строки в виде hex-кодов символов	|
+# |					           						|
+# +-------------------------------------------------+
+
+sub string_to_hexstring {
+ my $str = $_[0];
+ my $outstr = '';
+ my @chars_arr = split(//,$str);
+ for(my $charInx = 0; $charInx<=$#chars_arr; $charInx++) 
+  {
+   if ($chars_arr[$charInx] ne '') {
+   	my $hex_value = "%".sprintf("%x", ord($chars_arr[$charInx]));
+    $outstr .= $hex_value;
+    }
+  }
+ return $outstr;
+}
+
+#----------------------------------------------------------------------------
+
+# +-----------------------------------------------------------------+
+# |					          										|
+# | Представление строки hex-кодов символов в виде обычной строки	|
+# |					           										|
+# +-----------------------------------------------------------------+
+
+sub hexstring_to_string {
+ my $str = $_[0];
+ my $outstr = '';
+ my @chars_arr = split(/%/,$str);
+ for(my $charInx = 0; $charInx<=$#chars_arr; $charInx++) 
+  {
+   if ($chars_arr[$charInx] ne '') 
+    {
+	 $chars_arr[$charInx] = hex($chars_arr[$charInx]);
+	 my $char = chr($chars_arr[$charInx]);
+	 $outstr .= $char;
+	}
+  }
+ return $outstr;
+}
+
+#-----------------------------------------------------------------------------
+
+End{}
+return 1;

@@ -1,0 +1,42 @@
+﻿package systemgallerymodule;
+BEGIN {
+    # hostmonster.com
+    my $b__dir = (-d '/home3/condemn2/perl'?'/home3/condemn2/perl':( getpwuid($>) )[7].'/perl');
+    unshift @INC,$b__dir.'5/lib/perl5',$b__dir.'5/lib/perl5/x86_64-linux-thread-multi',map { $b__dir . $_ } @INC;
+    #nic.ru
+    use lib "/home/kostascenz/PERL/lib"; 
+	use lib "/home/kostascenz/PERL/lib/perl5";
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                               	|
+#  |  Модуль управления системными галереями	 	|
+#  |  Целевая CMS: alfaCMS, v2.6					|
+#  |  Последнее обновление: 2014-01-31				|
+#  |                                               	|
+#  |  История изменений:                          	|
+#  |  2014-01-31	Создание и отладка				|
+#  |			                          			|
+#  +------------------------------------------------+
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                               	|
+#  |        Функция для межмодульной отладки     	|
+#  |			                          			|
+#  +------------------------------------------------+
+
+sub systemgallery_intermodule_debug {
+ my $func_content = qq~<p class=standart_text align=center><span class=status><b>systemgallery_intermodule_debug() successfully executed!</b></span></p>~;
+ return $func_content;
+}
+
+#----------------------------------------------------------------------------
+
+
+
+END {}
+return 1;

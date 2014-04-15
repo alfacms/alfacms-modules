@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+	<systemtype>0</systemtype>
+    <name>weblogmodule</name>
+    <menuitem>«Блог»</menuitem>
+    <description>Управление разделом «Блог»</description>
+    <version>1.4</version>
+    <module_library>libs/modules/weblogmodule/weblog.client.lib</module_library>
+    <module_include>libs/modules/weblogmodule/weblog.client.inc</module_include>
+    <startaction>weblog</startaction>
+    <startfunction>weblogmodule::show_weblog_clientpage();</startfunction>
+    <configuration>
+        <tankfile/>
+        <indexfile/>
+        <datafile/>
+    </configuration>
+</module>

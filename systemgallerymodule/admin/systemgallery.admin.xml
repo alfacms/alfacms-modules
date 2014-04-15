@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+    <name>systemgallerymodule</name>
+    <menuitem>Системная галерея</menuitem>
+    <description>Модуль управления системными фотографиями</description>
+    <version>1.4</version>
+    <module_library>admin/libs/modules/systemgallerymodule/systemgallery.admin.lib</module_library>
+    <module_include>admin/libs/modules/systemgallerymodule/systemgallery.admin.inc</module_include>
+    <startaction>admsystemgallery</startaction>
+    <startfunction>systemgallerymodule::show_SYSGALLERY_startpage</startfunction>
+    <configuration>
+        <tankfile>conf/system/sysgallery.tnk</tankfile>
+        <indexfile/>
+        <datafile/>
+    </configuration>
+</module>

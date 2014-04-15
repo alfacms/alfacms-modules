@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+    <name>systemgallerymodule</name>
+    <menuitem>Системная галерея</menuitem>
+    <description>Модуль управления системными фотографиями</description>
+    <version>1.4</version>
+    <module_library>libs/modules/systemgallerymodule/systemgallery.client.lib</module_library>
+    <module_include>libs/modules/systemgallerymodule/systemgallery.client.inc</module_include>
+    <startaction>systemgallery</startaction>
+    <startfunction>systemgallerymodule::systemgallery_intermodule_debug</startfunction>
+    <configuration>
+        <tankfile/>
+        <indexfile/>
+        <datafile/>
+    </configuration>
+</module>

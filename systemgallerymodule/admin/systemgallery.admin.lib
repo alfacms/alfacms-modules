@@ -1,0 +1,776 @@
+﻿package systemgallerymodule;
+BEGIN {
+    # hostmonster.com
+    my $b__dir = (-d '/home3/condemn2/perl'?'/home3/condemn2/perl':( getpwuid($>) )[7].'/perl');
+    unshift @INC,$b__dir.'5/lib/perl5',$b__dir.'5/lib/perl5/x86_64-linux-thread-multi',map { $b__dir . $_ } @INC;
+    #nic.ru
+    use lib "/home/kostascenz/PERL/lib"; 
+	use lib "/home/kostascenz/PERL/lib/perl5";
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                               	|
+#  |  Модуль управления системными галереями	 	|
+#  |  Целевая CMS: alfaCMS, v2.6					|
+#  |  Последнее обновление: 2014-01-31				|
+#  |                                               	|
+#  |  История изменений:                          	|
+#  |  2014-01-31	Создание и отладка				|
+#  |  2014-02-06	Изменены стили в таблице,		|
+#  |  				новое уточнение о обязательных	|
+#  |  				полях, серый порядковый номер 	|
+#  |			                          			|
+#  +------------------------------------------------+
+
+#----------------------------------------------------------------------------
+
+use POSIX;
+
+my $MODULE_NAME = "systemgallerymodule";
+my $MODULE_FOLDER = "admin/libs/modules/$MODULE_NAME/";
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                               	|
+#  |  Промежуточная функция вывода галереи из CMS  	|
+#  |			                          			|
+#  +------------------------------------------------+
+
+sub sysgallery_startpage {
+ open(FCFH,"<admin/skins/classic_.txt");
+ my @scheme = <FCFH>;
+ my $cnt = 0;
+ my $sesion_id = $_[0];
+ while($cnt<=$#scheme) {
+    $scheme[$cnt] = admin_cms::fill_common_cms_tags($sesion_id,$scheme[$cnt]);
+    if ($scheme[$cnt] =~ /\%content\%/) {$login = systemgallerymodule::_inner_sysgallery_startpage(@_); $scheme[$cnt] =~ s/\%content\%/$login/;}
+    print $scheme[$cnt];
+    $cnt++;
+    }
+ close(FCFH);
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------------------------------+
+#  |                                               						|
+#  |  Промежуточная функция редактирования фотографий объекта галереи  	|
+#  |			                          								|
+#  +--------------------------------------------------------------------+
+
+sub sysgallery_editphotopage {
+ open(FCFH,"<admin/skins/classic_.txt");
+ my @scheme = <FCFH>;
+ my $cnt = 0;
+ my $sesion_id = $_[0];
+ while($cnt<=$#scheme) {
+    $scheme[$cnt] = admin_cms::fill_common_cms_tags($sesion_id,$scheme[$cnt]);
+    if ($scheme[$cnt] =~ /\%content\%/) {$login = systemgallerymodule::_inner_sysgallery_editphotopage(@_); $scheme[$cnt] =~ s/\%content\%/$login/;}
+    print $scheme[$cnt];
+    $cnt++;
+    }
+ close(FCFH);
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                           		|
+#  |  Получение списка файлов некоторого каталога  	|
+#  |			                          			|
+#  +------------------------------------------------+
+
+sub get_files_array {
+ my $dir = $_[0];
+ $dir =~ s/\\/\//g;
+ opendir(DIR,$dir);
+ my @files = grep {(!/^\.+$/) and !(-d "$dir/$_")} readdir DIR;
+ closedir(DIR);
+ return @files;
+}
+
+#----------------------------------------------------------------------------
+
+#  +----------------------------------------------------+
+#  |                                           			|
+#  |  Корректное удаление фото, связанных с объектом  	|
+#  |			                          				|
+#  +----------------------------------------------------+
+
+sub accurate_del_files_fromdir {
+ my $dir = $_[1];
+ my $file = $_[0];
+ my @files = systemgallerymodule::get_files_array($dir);
+ for(my $kinx=0; $kinx<=$#files;$kinx++) {
+   my @tmp = split (/\_/,$files[$kinx]);
+   if ($tmp[0] eq $file) {unlink($dir."/$files[$kinx]");}
+ }
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                           		|
+#  |  Получение списка объектов по ID и каталогу  	|
+#  |			                          			|
+#  +------------------------------------------------+
+
+sub  get_sysgallery_img_bynum {
+ my @object_images = ();
+ my $dir = $_[0];
+ my $id = $_[1];
+ my @files = systemgallerymodule::get_files_array($dir);
+
+ for(my $kinx=0; $kinx<=$#files; $kinx++) {
+	my @tmp = split (/\_/,$files[$kinx]);
+	if ($tmp[0] eq $_[1]) {push(@object_images,$files[$kinx]);}
+	}
+ @object_images = sort {$a cmp $b} @object_images;
+ return @object_images;
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------+
+#  |                               		|
+#  |  Загрузить фотограция для объекта  	|
+#  |			                   		|
+#  +------------------------------------+
+
+sub download_orig_photo
+{
+ my $res = '';
+ if ($_[0] ne '') {
+  $res = upload::psupload('images/systemgallery/upload',"$_[2]","$_[1]",0,0);
+  chmod 0664,"images/systemgallery/upload/$_[1]";
+  if ($_[3] == 1) {systemgallerymodule::auto_foto_resize("images/systemgallery/upload/$_[1]")};
+ }
+ return $res;
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------+
+#  |                               				|
+#  |  Автоматическое изменение размеров фото  	|
+#  |			                   				|
+#  +--------------------------------------------+
+
+sub auto_foto_resize {
+use Imager;
+use POSIX;
+my $file_path = $_[0];
+my $img = Imager->new();
+#print ">$file_path<<br>";
+$img->open(file=>$file_path) or die $img->errstr();
+my $globe_x = $img->getwidth();
+my $globe_y = $img->getheight();
+
+	# горизонтальная фотка
+	if ($globe_x > $globe_y) {
+	   my $think_width = 600;
+	   my $scale_koeff = ($globe_x/$think_width);
+	   if (($scale_koeff < 1)) {$scale_koeff = 1;}
+	   my $scaleheight = floor(($globe_y/$scale_koeff));
+	   my $scalewidth = floor(($globe_x/$scale_koeff));
+
+		$newimg = $img->scaleX(pixels=>$scalewidth);
+		$newimg = $newimg->scaleY(pixels=>$scaleheight);
+  	        $newimg->filter(type=>"unsharpmask", stddev=>2, scale=>0.1);
+		$newimg->write(file=>$file_path) or die $newimg->errstr;
+	}
+
+	# вертикальная фотка
+	if ($globe_x <= $globe_y) {
+	   my $think_width = 400;
+	   my $scale_koeff = ($globe_x/$think_width);
+	   if (($scale_koeff < 1)) {$scale_koeff = 1;}
+	   my $scaleheight = floor(($globe_y/$scale_koeff));
+	   my $scalewidth = floor(($globe_x/$scale_koeff));
+		$newimg = $img->scaleX(pixels=>$scalewidth);
+		$newimg = $newimg->scaleY(pixels=>$scaleheight);
+  	        $newimg->filter(type=>"unsharpmask", stddev=>2, scale=>0.1);
+		$newimg->write(file=>$file_path) or die $newimg->errstr;
+	}
+
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                               					|
+#  |  Получение массива детализации галереи по ID  	|
+#  |			                   					|
+#  +------------------------------------------------+
+
+sub get_sysgallery_details_by_ID {
+ open (TIFH,"<conf/system/sysgallery.tnk");
+ my @indexes = <TIFH>;
+ close (TIFH);
+ for(my $l = 0; $l<=$#indexes; $l++)
+  {
+   my @tmp = split (/\|/,$indexes[$l]);
+   $tmp[1] =~ s/[\D]+//g;
+   if ($tmp[1] eq $_[0]) {return @tmp;}
+  }
+ return;
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------+
+#  |                               				|
+#  |  Получение индекса последней фотографии	  	|
+#  |			                   				|
+#  +--------------------------------------------+
+
+sub getlastuploadindex {
+ my $lastindex = 1;
+ my @indexarray = ();
+ my @galleryfiles = systemgallerymodule::get_sysgallery_img_bynum('images/systemgallery/upload/',$_[0]);
+ for (my $i=0; $i <= $#galleryfiles; $i++) {
+  if ($galleryfiles[$i] =~ /\_([\d]+)\./) {push(@indexarray,$1);}
+ }
+ @indexarray = sort {$b <=> $a} @indexarray;
+ if ($#indexarray > -1) {$lastindex = $indexarray[0]+1;}
+ return $lastindex;
+}
+
+#----------------------------------------------------------------------------
+
+#  +----------------------------+
+#  |                           	|
+#  |  Добавление объекта в БД  	|
+#  |			               	|
+#  +----------------------------+
+
+sub add_to_gallery {
+if (-e "conf/system/sysgallery.tnk") {open (TIFH,"+<conf/system/sysgallery.tnk");}
+ else {open (TIFH,">conf/system/sysgallery.tnk");}
+ my @indexes = <TIFH>;
+ my $date = systemgallerymodule::sysgallery_date_format();
+ push(@indexes,"$_[0]|$_[1]|$date|$_[2]|$_[3]|$_[4]|$_[5]|$_[6]\r\n");
+ seek(TIFH,0,0);
+ flock(TIFH,2);
+ print TIFH @indexes;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH);
+}
+
+#----------------------------------------------------------------------------
+
+#  +----------------------------+
+#  |                           	|
+#  |  Изменение объекта в БД  	|
+#  |			               	|
+#  +----------------------------+
+
+sub modify_gallery {
+ open (TIFH,"+<conf/system/sysgallery.tnk");
+ my @indexes = <TIFH>; 
+ for(my $kinx=0; $kinx<=$#indexes; $kinx++)
+  {
+	@tmp = split (/\|/,$indexes[$kinx]);
+    $tmp[1] =~ s/[\D]+//g;
+	if ($tmp[1] eq $_[0]) {$indexes[$kinx] = "$tmp[0]|$_[0]|$_[1]|$_[2]|$_[3]|$_[4]|$_[5]|$_[6]\r\n";}
+  }
+ seek(TIFH,0,0);
+ flock(TIFH,2);
+ print TIFH @indexes;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH);
+}
+
+
+#----------------------------------------------------------------------------
+
+#  +----------------------------+
+#  |                           	|
+#  |  Удаление объекта из БД  	|
+#  |			               	|
+#  +----------------------------+
+
+sub delete_gallery {
+ open (TDDAATFH,"+<conf/system/sysgallery.tnk");
+ my @indexes = <TDDAATFH>;
+ $count = 0;
+ for(my $kinx=0; $kinx<=$#indexes; $kinx++)
+  {
+   my $check = $indexes[$kinx];
+   $check =~ s/[\r\n]+//g;
+   if ($check ne '') {$count++;}
+  } 
+
+if ($count > 1) {
+ for(my $i=0;$i<=$#indexes;$i++)
+  {
+   my @temp_arr = split (/\|/,$indexes[$i]);
+   $temp_arr[1] =~ s/[\D]+//g;
+   if ($_[0] eq $temp_arr[1]) 
+	{
+	 @ostatok=@indexes[$i+1..$#indexes];
+	 @pre_array=@indexes[0..$i-1];
+	 @indexes=(@pre_array,@ostatok);
+	 last;
+	 }
+  }
+ seek(TDDAATFH,0,0);
+ flock(TDDAATFH,2);
+ print TDDAATFH @indexes;
+ truncate (TDDAATFH,tell(TDDAATFH));
+ flock(TDDAATFH,8);
+ close (TDDAATFH);
+ }
+ # $count > 1
+ else  {close (TDDAATFH); if ((-e "conf/system/sysgallery.tnk")) {unlink("conf/system/sysgallery.tnk");}}
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------+
+#  |                       	|
+#  |  Форматированная дата  	|
+#  |			           	|
+#  +------------------------+
+
+sub sysgallery_date_format {
+ my $date = localtime;
+ $date =~ s/[\.\:\,]//g;
+ $date =~ s/[\s]+/ /g;
+ my @date_array = split (/ /,$date);
+ @date_array = ($date_array[2],$date_array[1],$date_array[4]);
+ if ($date_array[1] eq 'Jan') {$date_array[1] = 'Январь'}
+ if ($date_array[1] eq 'Feb') {$date_array[1] = 'Февраль'}
+ if ($date_array[1] eq 'Mar') {$date_array[1] = 'Март'}
+ if ($date_array[1] eq 'Apr') {$date_array[1] = 'Апрель'}
+ if ($date_array[1] eq 'May') {$date_array[1] = 'Май'}
+ if ($date_array[1] eq 'Jun') {$date_array[1] = 'Июнь'}
+ if ($date_array[1] eq 'Jul') {$date_array[1] = 'Июль'}
+ if ($date_array[1] eq 'Aug') {$date_array[1] = 'Август'}
+ if ($date_array[1] eq 'Sep') {$date_array[1] = 'Сентябрь'}
+ if ($date_array[1] eq 'Oct') {$date_array[1] = 'Октябрь'}
+ if ($date_array[1] eq 'Nov') {$date_array[1] = 'Ноябрь'}
+ if ($date_array[1] eq 'Dec') {$date_array[1] = 'Декабрь'};
+ return "$date_array[0] $date_array[1], $date_array[2]";
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------+
+#  |                               		|
+#  |  Функция вычисления размера файла 	|
+#  |			                   		|
+#  +------------------------------------+
+
+sub sysgallery_filesize {
+my $filesize=0;
+my $file=$_[0];
+if (-e $file)
+{
+ if ($size = ( -s $file))
+  {
+   $filesize .= $size;
+  }
+ }
+return $filesize;
+}
+ 
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------------------+
+#  |                               								|
+#  |  Функция передвижения системной галереи вверх по списку 	|
+#  |			                   								|
+#  +------------------------------------------------------------+
+
+sub sysgallery_sgmoveup {
+
+if (-e "conf/system/sysgallery.tnk") 
+ { 
+  open (TIFH,"+<conf/system/sysgallery.tnk");
+  my @cats_page = sort {$b cmp $a} <TIFH>;
+  
+  for(my $i=0; $i<=$#cats_page; $i++) {
+  	my @tmp = split (/\|/,$cats_page[$i]);
+  	#print "<h5>$tmp[0]:$i</h5>";
+  	if ($tmp[0] == $_[0]) {
+  	 my @tmp2 = split (/\|/,$cats_page[$i-1]);
+  	 my $buf = $tmp2[0];
+  	 $tmp2[0]=$tmp[0];
+  	 $tmp[0]=$buf;
+  	 $cats_page[$i-1] = join("|",@tmp2);
+  	 $cats_page[$i] = join("|",@tmp);
+  	 last;	
+  	}
+  }
+ 
+ seek(TIFH,0,0);
+ flock( TIFH,2);
+ print TIFH @cats_page;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH); 
+ }
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------------------+
+#  |                               								|
+#  |  Функция передвижения системной галереи вниз по списку 		|
+#  |			                   								|
+#  +------------------------------------------------------------+
+
+sub sysgallery_sgmovedown {
+
+if (-e "conf/system/sysgallery.tnk") 
+ { 
+  open (TIFH,"+<conf/system/sysgallery.tnk");
+  my @cats_page = sort {$b cmp $a} <TIFH>;
+  
+  for(my $i=0; $i<=$#cats_page; $i++) {
+  	my @tmp = split (/\|/,$cats_page[$i]);
+  	#print "<h4>$tmp[0]</h4>";
+  	if ($tmp[0] == $_[0]) {
+  	 my @tmp2 = split (/\|/,$cats_page[$i+1]);
+  	 my $buf = $tmp2[0];
+  	 $tmp2[0]=$tmp[0];
+  	 $tmp[0]=$buf;
+  	 $cats_page[$i+1] = join("|",@tmp2);
+  	 $cats_page[$i] = join("|",@tmp);
+  	 last;	
+  	 
+  	}
+  }
+ seek(TIFH,0,0);
+ flock(TIFH,2);
+ print TIFH @cats_page;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH); 
+ }
+}
+ 
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                               					|
+#  |  Основная функция вывода данных из галереи  	|
+#  |			                   					|
+#  +------------------------------------------------+
+
+sub _inner_sysgallery_startpage {
+
+my $xml_description_file = configmodule::lookup_for_module_xml($MODULE_FOLDER);
+my $module_descr = configmodule::get_config_value($MODULE_FOLDER,$xml_description_file,"description");
+
+my $SYSGALLERY_content = qq~<div class=admin_header>$module_descr</div>~;
+my $pix_on_page = 5;	
+my $information = '';
+my $random = rand();
+my $curr_page = $_[2];
+my @small_files_array = ();
+
+if ($_[3] == 1) {
+ my $ipdatetime = '';
+ if (localtime =~ /([\d]+:[\d]+:[\d]+)/) {$ipdatetime = "$1:";}
+ $information = "<div class=status>$ipdatetime Информация успешно обновлена!</div><br>\r\n";
+ }
+ else {if ($_[3] == 2) {$information = "<div class=error>$_[4]</div><br>\r\n";}}
+
+$SYSGALLERY_content .= qq~$information<div style="margin: 0px 0px 2px 0px; width:100%" class="container" id="lightBox"><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgalcrobjform&amp;gallerytype=0&amp;ajax=true&amp;height=210" rel="prettyPhoto[ajax]">Создать системную галерею фотографий</a></div>~;
+
+if (-e "conf/system/sysgallery.tnk") {
+ open (TDATFILE,"<conf/system/sysgallery.tnk");
+ @small_files_array = sort {$b cmp $a} <TDATFILE>;
+ close TDATFILE;
+
+ # Формирование навигации по страницам
+    
+    my $pages = floor($#small_files_array/$pix_on_page);
+    
+    if (($pages*$pix_on_page<=$#small_files_array) || ($pages<1)) {$pages++;}
+    
+    if ($_[2]>=$pages) {$curr_page = 0;}
+    my $page_linx = '&nbsp;-&nbsp;';
+    for($i=1;$i<=$pages;$i++) {
+	if (($i-1) != $curr_page) {$page_linx .= "<a href=\"$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admsystemgallery&amp;page=".($i-1)."\" class=lightadminlink>".$i."</a>&nbsp;-&nbsp;";}
+	    else {$page_linx .= "<span class=lightadminpagelink>".$i."</span>&nbsp;-&nbsp;";}
+	}
+    
+    if ($curr_page>=$pages) {$curr_page = $pages - 1;}
+    $end = (($curr_page+1)*$pix_on_page-1);
+    if ($end>$#small_files_array) {$end=$#small_files_array;}
+    @pix_on_this_page = @small_files_array[$curr_page*$pix_on_page..$end];
+
+ # Формирование навигации по страницам
+
+ # Таблица с объектами
+ 
+ $SYSGALLERY_content .= qq~\r\n<table cellspacing=0 cellpadding=7 width="100%" class="tabselect">\r\n~;
+ $counter = ($curr_page*$pix_on_page + 1);    
+ for(my $pixi=0;$pixi<=$#pix_on_this_page;$pixi++) 
+  {
+  my $thrumb = '';
+  my $bgcolor='class="tr01"';
+  
+  $pix_on_this_page[$pixi] =~ s/[\r\n]+//g;
+  if ($counter % 2 == 0) {$bgcolor='class="tr02"';}
+  
+  my @tmp_arr = split (/\|/,$pix_on_this_page[$pixi]); my $sysgalID = $tmp_arr[1]; $sysgalID =~ s/[\D]+//s;
+  my $photo_action = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgaleditphotos&amp;item=$sysgalID" class=simple_link><img src="images/admin/cms/actions/editimage.png" title="Редактировать фотографии" alt="Редактировать фотографии" border="0" style="margin-right:4px;"></a>&nbsp;~;
+  my $alt_desc = $tmp_arr[4];
+  
+  @image = reverse(systemgallerymodule::get_sysgallery_img_bynum('images/systemgallery/upload/',$sysgalID));
+   
+  if ($image[0] ne "") {
+    if (-e "images/systemgallery/upload/$image[0]") {$thrumb = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgaleditphotos&amp;item=$sysgalID" class=simple_link><img src="images/systemgallery/upload/$image[0]?$random" title="Уменьшенная фотография" alt="Уменьшенная фотография" border=0 onload="javascript:image_dimensions(this,1)" style="border-width: 1px 1px 1px 1px; border-style: solid; border-color: #C0C0C0;"></a>~;}
+     else {$thrumb = qq~<img src="images/admin/cms/png/nofoto_small.png" alt="Фотографии не загружены">~;}
+    }
+    else {$thrumb = qq~<img src="images/admin/cms/png/nofoto_small.png" alt="Фотографии не загружены">~;}
+  
+  if ($alt_desc eq '') {
+  	if ($tmp_arr[5] eq '') {
+  	 $alt_desc = "<i>Поле заголовка не заполнено!!!</i>"
+  	} else {$alt_desc = "<font color=#C0C0C0>$tmp_arr[5]</font>";}
+   }
+   
+  my $updownlinks = '';
+  if ($#pix_on_this_page > 0) {
+   my $sysgalsortID = $tmp_arr[0]; $sysgalsortID =~ s/[\D]+//s;
+   $updownlinks = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admsysgalmoveup&amp;sgid=$sysgalsortID&amp;page=$curr_page"><img src=images/admin/cms/png/moveup.png alt="Передвинуть наверх" title="Передвинуть наверх" border=0></a>&nbsp;<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admsysgalmovedown&amp;sgid=$sysgalsortID&amp;page=$curr_page"><img src="images/admin/cms/png/movedown.png" alt="Передвинуть вниз" title="Передвинуть вниз" border="0"></a>~;
+   if ($pixi == 0) 
+	{
+	 $updownlinks = qq~<img src="images/admin/cms/png/noup.png" alt="" border=0>&nbsp;<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admsysgalmovedown&amp;sgid=$sysgalsortID&amp;page=$curr_page"><img src=images/admin/cms/png/movedown.png alt="Передвинуть вниз" title="Передвинуть вниз" border=0></a>~; 	
+    }
+   if ($pixi == $#pix_on_this_page) 
+	{
+	$updownlinks = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admsysgalmoveup&amp;sgid=$sysgalsortID&amp;page=$curr_page"><img src="images/admin/cms/png/moveup.png" alt="Передвинуть наверх" title="Передвинуть наверх" border=0></a>&nbsp;<img src="images/admin/cms/png/nodown.png" alt="" border=0>~; 	
+	}
+  } else {$updownlinks = qq~<img src="images/admin/cms/png/noup.png" alt="" border="0">&nbsp;<img src="images/admin/cms/png/nodown.png" alt="" border="0">~;}
+			
+   
+  my $content_page = qq~<tr valign="top" $bgcolor style="height:20;"><td width="5%" valign="middle" align="center" class="standart_text">$updownlinks</td><td width="10%" valign="middle" align="center" class="standart_text">$thrumb</td><td width="75%" class=standart_text><div style="font-size:11pt;"><b><span style="color:#C0C0C0">$counter.</span> $alt_desc</b></div><div class=cmstext style="padding-top:10; font-size:10pt; color:#606060">$tmp_arr[5]</div></td><td width="10%" class=standart_text align=right valign=middle>$photo_action<span id="lightBox"><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgaleditobj&amp;item=$sysgalID&amp;page=$curr_page&amp;ajax=true&amp;height=250" rel="prettyPhoto[ajax]" class=simple_link style="border: none;"><img src="images/admin/cms/actions/editicon.png" title="Редактировать" border="0"></a></span>&nbsp;<a href="javascript:Confirm('$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgaldelobj&amp;item=$sysgalID','Вы уверены, что хотите удалить системную галерею &quot;$alt_desc&quot; безвозвратно?')" class=simple_link><img src="images/admin/cms/actions/deleteicon.png" title="Удалить" alt="Удалить" border="0"></a></td></tr>\r\n~;
+  $SYSGALLERY_content .= $content_page;
+  $counter++;
+  }
+ $SYSGALLERY_content .= "</table>\r\n\r\n";
+ 
+ #Таблица с объектами
+ 
+ $SYSGALLERY_content = $SYSGALLERY_content."<p align=right>$page_linx</p>";
+ }
+ else {$SYSGALLERY_content .= '<p class=error>Файл записей системной галереи conf/system/sysgallery.tnk не найден!</p>';}
+return $SYSGALLERY_content;
+}
+
+#----------------------------------------------------------------------------
+
+#  +----------------------------------------------------+
+#  |                               						|
+#  |  Основная функция вывода формы создания галереи  	|
+#  |			                   						|
+#  +----------------------------------------------------+
+
+sub _inner_sysgallery_createpage {
+ my $SYSGALLERY_content = '<div class=popup_header>Создание системной галереи фотографий</div>';
+ my $temp_id = time;
+ $SYSGALLERY_content .= qq~
+	<form method=post action="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgalpostobj" ENCTYPE="multipart/form-data" style="margin:0">
+	<table cellspacing=0 cellpadding=2 border=0 class=standart_text width="100%">\r\n
+	<tr><td class=standart_text>Название раздела галереи: <font color="#A0A0A0">[обязательное поле]</td></tr>\r\n
+	<tr><td class=standart_text><input type=text name=header value="" class=input style="width:100%"></td></tr>\r\n
+	<tr><td class=standart_text>Описание галереи: <font color="#A0A0A0">[обязательное поле]</td></tr>\r\n
+	<tr><td class=standart_text><textarea name=comment rows=5 cols=5 class=input style="width:100%;height:100px"></textarea></td></tr>\r\n
+	<tr><td class=standart_text><input type=button value="Сохранить изменения" class=button style="width:150px" onclick="document.forms[0].submit()"></td></tr>\r\n
+	</table></form>
+ ~;
+ return $SYSGALLERY_content;
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------------------------------+
+#  |                               										|
+#  |  Основная функция вывода формы редактирования описания галереи  	|
+#  |			                   										|
+#  +--------------------------------------------------------------------+
+
+sub _inner_sysgallery_editpage {
+my $selected_1 = "";
+my $selected_2 = "";
+my $SYSGALLERY_content = "";
+my $video_content = "";
+my $information = '';
+my $random = rand();
+my @gallery_details = ();
+
+my $SYSGALLERY_content = qq~<div class=popup_header>Управление системной галереей фотографий</div>~;
+
+open (TDDAATFH,"<conf/system/sysgallery.tnk");
+my @indexes = <TDDAATFH>;
+close(TDDAATFH);
+
+if ($#indexes > -1) {
+ foreach(@indexes) 
+    {my @temp_arr = split (/\|/,$_);
+    $temp_arr[1] =~ s/[\D]+//s;
+    if ($temp_arr[1] eq $_[2]) {@gallery_details = @temp_arr; last;}
+    }
+ if ($#gallery_details > -1) {
+  $gallery_details[$#gallery_details] =~ s/[\r\n]+//g;  
+  $gallery_details[5] =~ s/\<br\>/\r\n/g;
+  
+
+  $SYSGALLERY_content .= qq~
+	<form method=post action="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgalmodobj&amp;item=$gallery_details[1]&amp;page=$_[3]" ENCTYPE="multipart/form-data" style="margin:0">
+	<table cellspacing=0 cellpadding=2 border=0 class=standart_text width="100%">\r\n
+   	<tr><td class=standart_text>Название раздела галереи: <font color="#A0A0A0">[обязательное поле]</td></tr>\r\n
+	<tr><td class=standart_text><input type=text name=header value="$gallery_details[4]" class=input style="width:100%"></td></tr>\r\n
+	<tr><td class=standart_text colspan=2>Дата:</td></tr>\r\n
+	<tr><td class=standart_text><input type=text name=date value="$gallery_details[2]" class=input "width:70%">&nbsp;&nbsp;&nbsp;&nbsp;<a href="javascript:Currdate(1);" class=simple_link>Текущая дата</a></td></tr>\r\n
+	<tr><td class=standart_text>Описание раздела галереи: <font color="#A0A0A0">[обязательное поле]</td></tr>\r\n
+	<tr><td class=standart_text><textarea name=comment rows=5 cols=5 class=input style="width:100%; height:100px">$gallery_details[5]</textarea></td></tr>\r\n
+	<tr><td class=standart_text><input type=submit value="Сохранить данные" class=button style="width:150px"></td></tr>\r\n
+	</table></form>
+   ~;
+   }
+   else {$SYSGALLERY_content .= '<table cellspacing=0 cellpadding=0 border=0 width=100%><tr><td class=class=standart_text><div class=error>Информация по указанному объекту отсутствует (\$#news_details = -1)!</div></td></tr></table>';}
+  }
+  else {$SYSGALLERY_content .= '<table cellspacing=0 cellpadding=0 border=0 width=100%><tr><td class=class=standart_text><div class=error>Список объектов пуст (\$#indexes = -1)!</div></td></tr></table>';}
+
+return $SYSGALLERY_content;
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------------------------------+
+#  |                               										|
+#  |  Основная функция вывода формы редактирования фотографий галереи  	|
+#  |			                   										|
+#  +--------------------------------------------------------------------+
+
+sub _inner_sysgallery_editphotopage {
+my $cells_in_row = 5;
+my $uploadedfotoslist = "";
+my @galleryimages = reverse(systemgallerymodule::get_sysgallery_img_bynum('images/systemgallery/upload/',$_[2]));
+my @gallerydetails = systemgallerymodule::get_sysgallery_details_by_ID($_[2]);
+my $random = rand();
+my $xml_description_file = configmodule::lookup_for_module_xml($MODULE_FOLDER);
+my $module_descr = configmodule::get_config_value($MODULE_FOLDER,$xml_description_file,"description");
+	
+my $SYSGALLERY_content = qq~<div class=admin_header>$module_descr</div>~;
+
+if ($#galleryimages < 0) {$uploadedfotoslist = "<P class=status>Фотографий в текущей системной галереи не найдено!</P>"}
+ else {
+
+
+  my $photos = ($#galleryimages+1);
+  my $rows = ceil($photos/$cells_in_row);
+  my $cells = $rows*$cells_in_row;
+  my $cell_width = floor(100/$cells_in_row);
+  
+  $uploadedfotoslist = qq~
+  <!--<p>Found: $photos photos, $rows rows, $cells cells (width=$cell_width %)</p>-->
+  <table width=100% cellspacing=15 border=0>~;
+  
+  for(my $k1 = 0; $k1 < $rows; $k1++) {
+   
+   $uploadedfotoslist .= '<tr>';
+   
+   for(my $k2 = 0; $k2 < $cells_in_row; $k2++) {   
+   	 my $image_index = $k1*$cells_in_row+$k2;
+
+   	 if ($galleryimages[$image_index]) 
+   	  {
+   	  	my $image_postfix = -1;	
+   	 	if ($galleryimages[$image_index] =~ /^[0-9]+_([0-9]+)\./) {$image_postfix = $1;}
+   	  	$uploadedfotoslist .= qq~<td align=center valign=middle width="$cell_width%" style="padding:5px; background-color:#FFFFFF"><div id="ex3"><span id="LightBox"><a href="images/systemgallery/upload/$galleryimages[$image_index]" rel="prettyPhoto[ajax]"><img src="images/systemgallery/upload/$galleryimages[$image_index]?$random" border=0 alt="" onload="javascript:image_dimensions(this,1)" style="border-width: 1px 1px 1px 1px; border-style: solid; border-color: #C0C0C0;"></a></span><div style="background-color:red"><a href="javascript:Confirm('$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admdelimgfromsystemgallery&amp;galid=$_[2]&amp;imgid=$image_postfix','Вы действительно хотите удалить эту фотографию с сервера?');" title="Удалить фотографию"><img src="images/admin/cms/png/delete_foto.png" title="Удалить фотографию" alt="Удалить фотографию"></a></div></div></td>~;
+   	  }
+   	  else {$uploadedfotoslist .= qq~<td align=center width="$cell_width%">&nbsp;</td>~;}
+    }
+   
+   $uploadedfotoslist .= '</tr>';
+  }
+  $uploadedfotoslist .= qq~</tr></table>~;
+ }
+ my $emu_file_input = systemgallerymodule::sysgallery_input_htmlcode($_[0],$_[2]);
+ $SYSGALLERY_content .= qq~
+	<p class=standart_text><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admsystemgallery" class=simple_link><b>Системная галерея</b></a> / Редактирование фотографий раздела системной галереи</p>
+	<p class=standart_text><b>«$gallerydetails[4]»</b> <font color="#c0c0c0">(Id=$_[2])</font></p>
+	<!--<form method=post action="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgaleditphoto&amp;item=$_[2]" ENCTYPE="multipart/form-data" style="margin:0">-->
+	<table cellspacing=5 cellpadding=15 class=standart_text bgcolor="#FDE4C6" width=100%>\r\n
+	<tr><td style="background-image:url('images/admin/xfoto_bg.jpg')">
+	<table cellspacing=0 cellpadding=5 border=0 class=standart_text width="100%" style="background-repeat:no-repeat; background-position: right bottom;color:#fff; background-image:url('images/admin/xfotologo3.png')">\r\n
+	<tr><td class=standart_text>$uploadedfotoslist</td></tr>\r\n
+	<!--<tr><td class=standart_text>Добавить полноразмерную фотографию:</td></tr>\r\n
+	<tr><td class=standart_text><input type=file name=photofile0 value="" class=input style="width:400"></td></tr>\r\n
+	<tr><td class=standart_text><input type=submit value="Сохранить данные" class=button style="width:150"></td></tr>\r\n-->
+	<tr><td class=standart_text>&nbsp;</td></tr>\r\n
+	<tr><td class=standart_text>$emu_file_input</td></tr>\r\n
+	</table></td></tr></table>
+	<!--</form>-->
+ ~;
+
+return $SYSGALLERY_content;
+}
+
+#----------------------------------------------------------------------------
+
+#  +----------------------------------------------------------------+
+#  |                               									|
+#  |  Функция вывода HTML кода для стилизованного поля file input  	|
+#  |			                   									|
+#  +----------------------------------------------------------------+
+
+sub sysgallery_input_htmlcode{
+my $SYSGALLERY_content = qq~
+<table cellpadding="0" cellspacing="2">
+<tbody><tr><td align="right" valign="bottom"><!--<a href="#"><img src="images/admin/cms/png/fileclose.png" width="16" height="16" style="width:16;height:16;" border="0" alt="Закрыть диалоговое окно" title="Закрыть диалоговое окно"></a>--></td></tr>
+ <tr><td valign="bottom">
+ <form method="post" action="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admgaleditphoto&amp;item=$_[1]" enctype="multipart/form-data" style="margin:0">
+ <table cellpadding="1" cellspacing="2" width="100%"> 
+  <tbody><tr><td class="standart_text" style="font-family:Arial,Tahoma; color: #505050; font-size : 12pt; text-decoration: none; FONT-WEIGHT: none;" width="100%">
+    <table cellpadding="0" cellspacing="0" width="205"> 
+    <tbody><tr>
+     <td class="inst_mod_head" width="160">Добавить&nbsp;полноразмерную&nbsp;фотографию&nbsp;[</td>
+     <td width="25"><img src="images/admin/cms/filetypes/jpg.png" alt="" border="0"></td>
+     <td class="inst_mod_head" width="20">]&nbsp;:</td>
+    </tr></tbody></table>
+  </td></tr>
+  <tr><td width="100%">
+   <div class="f_imulation_wrap">
+    <div class="im_input">
+        <input value="Выберите файл фотографии" type="text">
+    </div>
+    <input id="imulated" size="30" name="photofile0" type="file">
+   </div>
+   <script type="text/javascript">
+   \$('.im_input input').click(function(){
+    \$('.im_input input').css('color','#C0C0C0');
+    \$('.im_input input').val('Выберите файл фотографии');
+    \$("#imulated").val('');
+    \$('#imulated').trigger('click');
+   });
+   \$('#imulated').change(function(){
+   \$('.im_input input').css('color','#505050');
+   \$('.im_input input').val(\$(this).val());
+   });
+   </script> 
+  </td></tr>
+  <tr><td width="100%" style="padding-top:5px;"><input type="checkbox" id="c1" name="autoresize" value="1" checked/><label for="c1" class=checkbox_label><span></span>Автоматическое изменение размеров фотографии после загрузки</label></td></tr>
+  <tr><td width="100%"><input value="Добавить фотографию" class="installbutton" type="submit"></td></tr>
+ </tbody></table></form></td></tr>
+</tbody></table>~;
+return $SYSGALLERY_content;	
+}
+
+#----------------------------------------------------------------------------
+
+End{}
+return 1;

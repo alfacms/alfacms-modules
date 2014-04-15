@@ -1,0 +1,303 @@
+﻿package feedbackmodule;
+BEGIN {}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                               	|
+#  |  Модуль управления обратной связью			 	|
+#  |  Целевая CMS: alfaCMS, v2.6					|
+#  |  Последнее обновление: 2014-02-06				|
+#  |                                               	|
+#  |  История изменений:                          	|
+#  |  2014-02-06	Создание и отладка				|
+#  |			                          			|
+#  +------------------------------------------------+
+
+#----------------------------------------------------------------------------
+
+use POSIX;
+
+my $MODULE_NAME = "feedbackmodule";
+my $MODULE_FOLDER = "admin/libs/modules/$MODULE_NAME/";
+
+#----------------------------------------------------------------------------
+
+#  +----------------------------------------------------------------+
+#  |                                               					|
+#  |  Промежуточная функция вывода сообщений обратной связи из CMS  	|
+#  |			                          							|
+#  +----------------------------------------------------------------+
+
+sub show_feedback_startpage {
+open(FCFH,"<admin/skins/classic_.txt");
+@scheme = <FCFH>;
+my $cnt = 0;
+my $sesion_id = $_[0];
+while($cnt<=$#scheme) {
+    $scheme[$cnt] = admin_cms::fill_common_cms_tags($sesion_id,$scheme[$cnt]);
+    if ($scheme[$cnt] =~ /\%content\%/) {$login = feedbackmodule::_inner_feedback_startpage(@_); $scheme[$cnt] =~ s/\%content\%/$login/;}
+    print $scheme[$cnt];
+    $cnt++;
+    }
+close FCFH;
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------+
+#  |                                           	|
+#  |  Нативная функция вывода главной страницы  	|
+#  |			                          		|
+#  +--------------------------------------------+
+
+sub _inner_feedback_startpage {
+
+my $xml_description_file = configmodule::lookup_for_module_xml($MODULE_FOLDER);
+my $module_descr = configmodule::get_config_value($MODULE_FOLDER,$xml_description_file,"description");
+my $feedback_content_variable = qq~<div class=admin_header>$module_descr</div>~;
+
+if ($_[2] == 1) {
+ my $ipdatetime = '';
+ if (localtime =~ /([\d]+:[\d]+:[\d]+)/) {$ipdatetime = "$1:";}
+ $information = "<div class=status>$ipdatetime Информация успешно обновлена!</div><br>\r\n";
+ }
+ else {if ($_[2] == 2) {$information = "<div class=error>$_[3]</div><br>\r\n";}}
+
+$feedback_content_variable .= qq~$information~;
+my $curr_page = 0;
+
+if (-e "conf/system/feedback.tnk") {
+    
+  open (TDATFILE,"<conf/system/feedback.tnk");
+  my @feedback_on_curr_page = sort {$b cmp $a} <TDATFILE>;
+  close TIFH;
+
+# Вывод раздела в список
+
+  if ($#feedback_on_curr_page>-1) {
+   my $feedback_counter = 0;
+   $feedback_content_variable .= qq~<table cellspacing="0" cellpadding="10" width="100%" class="tabselect">~; 
+   for(my $inxonpage=0;$inxonpage<=$#feedback_on_curr_page;$inxonpage++)
+	{
+	  my $rand = rand();
+	  my @tmp_arr = split (/\|/,$feedback_on_curr_page[$inxonpage]);
+	  my $bgcolor='class="tr01"';
+	  if ($feedback_counter % 2 == 0) {$bgcolor='class="tr02"';}
+	  $tmp_arr[$#tmp_arr] =~ s/[\n]+//g;
+	  
+	  my $updownlinks = '';
+  	  if ($#feedback_on_curr_page > 0) {
+   		my $feedbacksortID = $tmp_arr[0]; $feedbacksortID =~ s/[\D]+//s;
+   		$updownlinks = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admfeedbackmoveup&amp;sgid=$feedbacksortID&amp;page=$curr_page"><img src=images/admin/cms/png/moveup.png alt="Передвинуть наверх" title="Передвинуть наверх" border=0></a>&nbsp;<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admfeedbackmovedown&amp;sgid=$feedbacksortID&amp;page=$curr_page"><img src="images/admin/cms/png/movedown.png" alt="Передвинуть вниз" title="Передвинуть вниз" border="0"></a>~;
+   		if ($inxonpage == 0) 
+		  {
+	 	   $updownlinks = qq~<img src="images/admin/cms/png/noup.png" alt="" border=0>&nbsp;<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admfeedbackmovedown&amp;sgid=$feedbacksortID&amp;page=$curr_page"><img src=images/admin/cms/png/movedown.png alt="Передвинуть вниз" title="Передвинуть вниз" border=0></a>~; 	
+    	  }
+   	    if ($inxonpage == $#feedback_on_curr_page) 
+	      {
+	       $updownlinks = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admfeedbackmoveup&amp;sgid=$feedbacksortID&amp;page=$curr_page"><img src="images/admin/cms/png/moveup.png" alt="Передвинуть наверх" title="Передвинуть наверх" border=0></a>&nbsp;<img src="images/admin/cms/png/nodown.png" alt="" border=0>~; 	
+	      }
+        } else {$updownlinks = qq~<img src="images/admin/cms/png/noup.png" alt="" border="0">&nbsp;<img src="images/admin/cms/png/nodown.png" alt="" border="0">~;}
+	  
+	  
+	  $feedback_content_variable .= qq~<tr $bgcolor style="height:20;"><td width="5%" class="standart_text" align="center">$updownlinks</td><td width="85%" class="standart_text" style="font-size:11pt;"><b><span style="color:#C0C0C0">$tmp_arr[2],</span> $tmp_arr[4] <span style="color:#707070">&lt;<a href="mailto:$tmp_arr[5]" class="maillink">$tmp_arr[5]</a>&gt;</span></b><div class=cmstext style="padding-top:10; font-size:10pt; color:#606060">$tmp_arr[7]</div><div class=cmstext style="font-size:10pt; color:#A0A0A0">$tmp_arr[8]</div></td><td width="10%" class="standart_text" align=right><a href="javascript:Confirm('$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=delfeedback&amp;razdelid=$tmp_arr[1]','Вы уверены, что хотите удалить сообщение от пользователья $tmp_arr[4] безвозвратно?')" class="simple_link"><img src="images/admin/cms/actions/deleteicon.png" title="Удалить" alt="Удалить" border="0"></a></td></tr>\n~;
+	  $feedback_counter++;
+	}
+   $feedback_content_variable .= qq~</table>~;
+  }
+  else {$feedback_content_variable .= qq~<p class=error>Список записей пуст - файл conf/system/feedback.tnk пуст (\$#feedback_on_curr_page = $#feedback_on_curr_page)!</p>~;}
+ 
+ } # if (-e "conf/system/feedback.tnk")
+ else {$feedback_content_variable .= qq~<p class=error>Список записей пуст - файл conf/system/feedback.tnk не найден!</p>~;}
+return $feedback_content_variable;
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------+
+#  |                       	|
+#  |  Форматированная дата  	|
+#  |			           	|
+#  +------------------------+
+
+sub _inner_feedback_date_format {
+ my $date = localtime;
+ $date =~ s/[\.\:\,]//g;
+ $date =~ s/[\s]+/ /g;
+ my @date_array = split (/ /,$date);
+ @date_array = ($date_array[2],$date_array[1],$date_array[4]);
+ if ($date_array[1] eq 'Jan') {$date_array[1] = 'Январь'}
+ if ($date_array[1] eq 'Feb') {$date_array[1] = 'Февраль'}
+ if ($date_array[1] eq 'Mar') {$date_array[1] = 'Март'}
+ if ($date_array[1] eq 'Apr') {$date_array[1] = 'Апрель'}
+ if ($date_array[1] eq 'May') {$date_array[1] = 'Май'}
+ if ($date_array[1] eq 'Jun') {$date_array[1] = 'Июнь'}
+ if ($date_array[1] eq 'Jul') {$date_array[1] = 'Июль'}
+ if ($date_array[1] eq 'Aug') {$date_array[1] = 'Август'}
+ if ($date_array[1] eq 'Sep') {$date_array[1] = 'Сентябрь'}
+ if ($date_array[1] eq 'Oct') {$date_array[1] = 'Октябрь'}
+ if ($date_array[1] eq 'Nov') {$date_array[1] = 'Ноябрь'}
+ if ($date_array[1] eq 'Dec') {$date_array[1] = 'Декабрь'}
+ return "$date_array[0] $date_array[1], $date_array[2]";
+}
+
+#----------------------------------------------------------------------------
+
+#  +----------------------------+
+#  |                           	|
+#  |  Удаление сообщения из БД 	|
+#  |			               	|
+#  +----------------------------+
+
+sub _inner_feedback_delete {
+ open (TDDAATFH,"+<conf/system/feedback.tnk");
+ my @indexes = <TDDAATFH>;
+ $count = 0;
+ foreach(my $kinx=0; $kinx<=$#indexes;$kinx++) 
+  {my $check = $indexes[$kinx];
+   $check =~ s/[\n]+//g;
+   if ($check ne '') {$count++;}
+  } 
+ if ($count > 1) {
+  for(my $i=0;$i<=$#indexes;$i++)
+    {
+     my @temp_arr = split (/\|/,$indexes[$i]);
+     if ($_[0] eq $temp_arr[1]) 
+	  {
+	   @ostatok=@indexes[$i+1..$#indexes];
+	   @pre_array=@indexes[0..$i-1];
+	   @indexes=(@pre_array,@ostatok);
+	   if (-e "conf/pages/$_[0].txt") {unlink("conf/pages/$_[0].txt");}
+	   last;
+ 	  }
+    }
+  seek(TDDAATFH,0,0);
+  flock(TDDAATFH,2);
+  print TDDAATFH @indexes;
+  truncate(TDDAATFH,tell(TDDAATFH));
+  flock(TDDAATFH,8);
+  close(TDDAATFH);
+ }
+ # $count > 1
+ else {close (TDDAATFH); if ((-e "conf/system/feedback.tnk")) {unlink("conf/system/feedback.tnk");}}
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------+
+#  |                         				  	|
+#  |  Детализация информации сообщения из БД 	|
+#  |			               					|
+#  +--------------------------------------------+
+
+sub _inner_feedback_getdetails {
+ open (TIFH,"+<conf/system/feedback.tnk");
+ my @indexes = <TIFH>;
+ my $mod_time = time;
+ my $date = feedbackmodule::_inner_feedback_date_format();
+ for(my $i=0;$i<=$#indexes;$i++)
+   {
+   	my @temp_arr = split (/\|/,$indexes[$i]);
+    if ($_[0] eq $temp_arr[1]) {return @temp_arr;}
+   }
+return -1;
+}
+
+#----------------------------------------------------------------------------
+
+#  +------------------------------------------------+
+#  |                                           		|
+#  |  Получение списка файлов некоторого каталога  	|
+#  |			                          			|
+#  +------------------------------------------------+
+
+sub get_files_array {
+ my $dir = $_[0];
+ $dir =~ s/\\/\//g;
+ opendir DIR,$dir;
+ my @files = grep {(!/^\.+$/) and !(-d "$dir/$_")} readdir DIR;
+ closedir DIR;
+ return @files;
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------------------+
+#  |                               							|
+#  |  Функция передвижения записи в блоге вверх по списку 	|
+#  |			                   							|
+#  +--------------------------------------------------------+
+
+sub _inner_feedback_sgmoveup {
+
+if (-e "conf/system/feedback.tnk") 
+ { 
+  open (TIFH,"+<conf/system/feedback.tnk");
+  my @cats_page = sort {$b cmp $a} <TIFH>;
+  
+  for(my $i=0; $i<=$#cats_page; $i++) {
+  	my @tmp = split (/\|/,$cats_page[$i]);
+  	#print "<h5>$tmp[0]:$i</h5>";
+  	if ($tmp[0] == $_[0]) {
+  	 my @tmp2 = split (/\|/,$cats_page[$i-1]);
+  	 my $buf = $tmp2[0];
+  	 $tmp2[0]=$tmp[0];
+  	 $tmp[0]=$buf;
+  	 $cats_page[$i-1] = join("|",@tmp2);
+  	 $cats_page[$i] = join("|",@tmp);
+  	 last;	
+  	}
+  }
+ 
+ seek(TIFH,0,0);
+ flock( TIFH,2);
+ print TIFH @cats_page;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH); 
+ }
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------------------+
+#  |                               							|
+#  |  Функция передвижения записи в блоге вниз по списку 	|
+#  |			                   							|
+#  +--------------------------------------------------------+
+
+sub _inner_feedback_sgmovedown {
+
+if (-e "conf/system/feedback.tnk") 
+ { 
+  open (TIFH,"+<conf/system/feedback.tnk");
+  my @cats_page = sort {$b cmp $a} <TIFH>;
+  
+  for(my $i=0; $i<=$#cats_page; $i++) {
+  	my @tmp = split (/\|/,$cats_page[$i]);
+  	#print "<h4>$tmp[0]</h4>";
+  	if ($tmp[0] == $_[0]) {
+  	 my @tmp2 = split (/\|/,$cats_page[$i+1]);
+  	 my $buf = $tmp2[0];
+  	 $tmp2[0]=$tmp[0];
+  	 $tmp[0]=$buf;
+  	 $cats_page[$i+1] = join("|",@tmp2);
+  	 $cats_page[$i] = join("|",@tmp);
+  	 last;	
+  	 
+  	}
+  }
+ seek(TIFH,0,0);
+ flock(TIFH,2);
+ print TIFH @cats_page;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH); 
+ }
+}
+
+#----------------------------------------------------------------------------
+
+End{}
+return 1;

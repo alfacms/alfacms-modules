@@ -1,0 +1,620 @@
+﻿package weblogmodule;
+BEGIN {}
+
+#----------------------------------------------------------------------------
+
+use POSIX;
+
+my $MODULE_NAME = "weblogmodule";
+my $MODULE_FOLDER = "admin/libs/modules/$MODULE_NAME/";
+
+#----------------------------------------------------------------------------
+
+##################################################
+#                                                #
+#  Промежуточная функция вывода записей из CMS   #
+#			                       				 #
+##################################################
+
+sub show_weblog_startpage {
+open(FCFH,"<admin/skins/classic_.txt");
+@scheme = <FCFH>;
+my $cnt = 0;
+my $sesion_id = $_[0];
+while($cnt<=$#scheme) {
+    $scheme[$cnt] = admin_cms::fill_common_cms_tags($sesion_id,$scheme[$cnt]);
+    if ($scheme[$cnt] =~ /\%content\%/) {$login = weblogmodule::_inner_weblog_startpage(@_); $scheme[$cnt] =~ s/\%content\%/$login/;}
+    print $scheme[$cnt];
+    $cnt++;
+    }
+close FCFH;
+}
+
+#----------------------------------------------------------------------------
+
+##################################################################
+#                                                	       		 #
+#  Промежуточная функция создания нового раздела записей из CMS  #
+#			                           		 					 #
+##################################################################
+
+sub create_weblog_page {
+open(FCFH,"<admin/skins/classic_.txt");
+@scheme = <FCFH>;
+my $cnt = 0;
+my $sesion_id = $_[0];
+while($cnt<=$#scheme) {
+    $scheme[$cnt] = admin_cms::fill_common_cms_tags($sesion_id,$scheme[$cnt]);
+    if ($scheme[$cnt] =~ /\%content\%/) {$login = weblogmodule::_inner_weblog_createrazdelpage(@_); $scheme[$cnt] =~ s/\%content\%/$login/;}
+    print $scheme[$cnt];
+    $cnt++;
+    }
+close FCFH;
+}
+
+#----------------------------------------------------------------------------
+
+#########################################################
+#                                                       #
+#  Промежуточная функция редактирования раздела из CMS  #
+#			                                			#
+#########################################################
+
+sub edit_weblog_page {
+open(FCFH,"<admin/skins/classic_.txt");
+@scheme = <FCFH>;
+my $cnt = 0;
+my $sesion_id = $_[0];
+while($cnt<=$#scheme) {
+    $scheme[$cnt] = admin_cms::fill_common_cms_tags($sesion_id,$scheme[$cnt]);
+    if ($scheme[$cnt] =~ /\%content\%/) {$login = weblogmodule::_inner_weblog_editpage (@_); $scheme[$cnt] =~ s/\%content\%/$login/;}
+    print $scheme[$cnt];
+    $cnt++;
+    }
+close FCFH;
+}
+
+#----------------------------------------------------------------------------
+
+################################################################
+#                                                	      	   #
+#  Промежуточная функция вывода содержимого подраздела из CMS  #
+#			                         	       				   #
+################################################################
+
+sub show_weblog_podrazdeltextpage {
+open(FCFH,"<admin/skins/classic_.txt");
+@scheme = <FCFH>;
+my $cnt = 0;
+my $sesion_id = $_[0];
+while($cnt<=$#scheme) {
+    $scheme[$cnt] = admin_cms::fill_common_cms_tags($sesion_id,$scheme[$cnt]);
+    if ($scheme[$cnt] =~ /\%content\%/) {$login = weblogmodule::_inner_weblog_podrazdeltextpage(@_); $scheme[$cnt] =~ s/\%content\%/$login/;}
+    print $scheme[$cnt];
+    $cnt++;
+    }
+close FCFH;
+}
+
+#----------------------------------------------------------------------------
+
+###########################
+#                         #
+#  Вывод главной страницы #
+#			 			  #
+###########################
+
+sub _inner_weblog_startpage {
+
+my $xml_description_file = configmodule::lookup_for_module_xml($MODULE_FOLDER);
+my $module_descr = configmodule::get_config_value($MODULE_FOLDER,$xml_description_file,"description");
+my $weblog_content_variable = qq~<div class=admin_header>$module_descr</div>~;
+
+my $weblog_counter = 0;
+my $pix_on_page = 5;	
+my $curr_page = $_[2];
+
+if ($_[3] == 1) {
+ my $ipdatetime = '';
+ if (localtime =~ /([\d]+:[\d]+:[\d]+)/) {$ipdatetime = "$1:";}
+ $information = "<div class=status>$ipdatetime Информация успешно обновлена!</div><br>\r\n";
+ }
+ else {if ($_[3] == 2) {$information = "<div class=error>$_[4]</div><br>\r\n";}}
+
+$weblog_content_variable .= qq~$information<div style="margin: 0px 0px 2px 0px; width:100%" class="container" id="lightBox"><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=crweblograzdel&amp;page=$curr_page&amp;ajax=true&amp;height=450" rel="prettyPhoto[ajax]">Создать новую запись в блоге</a></div>~;
+
+if (-e "conf/system/weblog.tnk") {
+    
+  open (TDATFILE,"<conf/system/weblog.tnk");
+  my @weblog_on_curr_page = sort {$b cmp $a} <TDATFILE>;
+  close TIFH;
+
+# Вывод раздела в список
+
+  if ($#weblog_on_curr_page>-1) {
+  	
+   # Формирование навигации по страницам
+    
+   my $pages = floor($#weblog_on_curr_page/$pix_on_page);
+    
+   if (($pages*$pix_on_page<=$#weblog_on_curr_page) || ($pages<1)) {$pages++;}
+    
+   if ($curr_page>=$pages) {$curr_page = 0;}
+   my $page_linx = '&nbsp;-&nbsp;';
+   for($i=1;$i<=$pages;$i++) 
+    {
+	 if (($i-1) != $curr_page) {$page_linx .= "<a href=\"$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblog&amp;page=".($i-1)."\" class=admpageslink>".$i."</a>&nbsp;-&nbsp;";}
+	  else {$page_linx .= "<span class=lightadminpagelink>".$i."</span>&nbsp;-&nbsp;";}
+	}
+    
+   if ($curr_page>=$pages) {$curr_page = $pages - 1;}
+   my $end = (($curr_page+1)*$pix_on_page)-1;
+   if ($end>$#weblog_on_curr_page) {$end=$#weblog_on_curr_page;}
+   @weblog_on_curr_page = @weblog_on_curr_page[$curr_page*$pix_on_page..$end];
+
+   # Формирование навигации по страницам $seotags_content_variable .= join("<br>",@items_on_this_page);
+  	
+   my $weblog_counter = 0;
+   $weblog_content_variable .= qq~<table cellspacing="0" cellpadding="10" width="100%" class="tabselect">~; 
+   for(my $inxonpage=0;$inxonpage<=$#weblog_on_curr_page;$inxonpage++)
+	{
+	  my $rand = rand();
+	  my @tmp_arr = split (/\|/,$weblog_on_curr_page[$inxonpage]);
+	  my $bgcolor='class="tr01"';
+	  if ($weblog_counter % 2 == 0) {$bgcolor='class="tr02"';}
+	  $tmp_arr[$#tmp_arr] =~ s/[\n]+//g;
+	  
+	  my $updownlinks = '';
+	  my $nextpage = $curr_page;
+   	  my $prevpage = $curr_page;
+   	  if ($inxonpage == $#weblog_on_curr_page) {$nextpage++;}
+   	  if ($inxonpage == 0) {$prevpage--; if ($prevpage<0) {$prevpage=0;}} 
+  	  if ($#weblog_on_curr_page > 0) {
+   		my $weblogsortID = $tmp_arr[0]; $weblogsortID =~ s/[\D]+//s;
+   		$updownlinks = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblogmoveup&amp;sgid=$weblogsortID&amp;page=$prevpage"><img src=images/admin/cms/png/moveup.png alt="Передвинуть наверх" title="Передвинуть наверх" border=0></a>&nbsp;<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblogmovedown&amp;sgid=$weblogsortID&amp;page=$nextpage"><img src="images/admin/cms/png/movedown.png" alt="Передвинуть вниз" title="Передвинуть вниз" border="0"></a>~;
+   		if ($inxonpage == 0 && $curr_page == 0) 
+		  {
+	 	   $updownlinks = qq~<img src="images/admin/cms/png/noup.png" alt="" border=0>&nbsp;<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblogmovedown&amp;sgid=$weblogsortID&amp;page=$curr_page"><img src=images/admin/cms/png/movedown.png alt="Передвинуть вниз" title="Передвинуть вниз" border=0></a>~; 	
+    	  }
+   	    if ($inxonpage == $#weblog_on_curr_page && $curr_page == ($pages-1)) 
+	      {
+	       $updownlinks = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblogmoveup&amp;sgid=$weblogsortID&amp;page=$curr_page"><img src="images/admin/cms/png/moveup.png" alt="Передвинуть наверх" title="Передвинуть наверх" border=0></a>&nbsp;<img src="images/admin/cms/png/nodown.png" alt="" border=0>~; 	
+	      }
+        } else 
+         {
+         	if ($curr_page > 0) {my $weblogsortID = $tmp_arr[0]; $weblogsortID =~ s/[\D]+//s; $updownlinks = qq~<a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblogmoveup&amp;sgid=$weblogsortID&amp;page=$prevpage"><img src=images/admin/cms/png/moveup.png alt="Передвинуть наверх" title="Передвинуть наверх" border=0></a>&nbsp;<img src="images/admin/cms/png/nodown.png" alt="" border="0">~;}
+         	 else {$updownlinks = qq~<img src="images/admin/cms/png/noup.png" alt="" border="0">&nbsp;<img src="images/admin/cms/png/nodown.png" alt="" border="0">~;}
+         	
+         }
+	  my @urls = ();
+	  my @sub_sr = split (/\,/,$tmp_arr[3]);
+      for (my $j = 0; $j <= $#sub_sr; $j++)
+   	   {
+   	    push(@urls,qq~$sub_sr[$j]<span style="color:#C0C0C0">.html</span>~); 
+   	   }
+   	  my $urls = join('<br>',@urls);
+	  $weblog_content_variable .= qq~<tr $bgcolor style="height:20;"><td width="5%" class="standart_text" align="center">$updownlinks</td><td width="85%" class="standart_text" style="font-size:11pt;"><b>$urls</b><div class=cmstext style="padding-top:10; font-size:10pt; color:#606060">$tmp_arr[7]</div><div class=cmstext style="font-size:10pt; color:#A0A0A0">$tmp_arr[8]</div></td><td width="10%" class="standart_text" align=right><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=addtexttoweblograzdel&amp;razdelid=$tmp_arr[1]&amp;page=$curr_page" class="simple_link"><img src="images/admin/cms/actions/addicon.png" title="Наполнить подраздел" alt="Наполнить подраздел" border="0"></a>&nbsp;<span id="lightBox"><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=editweblog&amp;razdelid=$tmp_arr[1]&amp;page=$curr_page&amp;ajax=true&amp;height=450" rel="prettyPhoto[ajax]" class="simple_link"><img src="images/admin/cms/actions/editicon.png" border="0"></a></span>&nbsp;<a href="javascript:Confirm('$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=delweblog&amp;razdelid=$tmp_arr[1]&amp;page=$curr_page','Вы уверены, что хотите удалить запись в блоге &quot;$tmp_arr[3]&quot; безвозвратно?')" class="simple_link"><img src="images/admin/cms/actions/deleteicon.png" title="Удалить" alt="Удалить" border="0"></a></td></tr>\n~;
+	  $weblog_counter++;
+	}
+   $weblog_content_variable .= qq~</table><p align=right>$page_linx</p>~;
+  }
+  else {$weblog_content_variable .= qq~<p class=error>Список записей пуст - файл conf/system/weblog.tnk пуст (\$#weblog_on_curr_page = $#weblog_on_curr_page)!</p>~;}
+ 
+ } # if (-e "conf/system/weblog.tnk")
+ else {$weblog_content_variable .= qq~<p class=error>Список записей пуст - файл conf/system/weblog.tnk не найден!</p>~;}
+return $weblog_content_variable;
+}
+
+#----------------------------------------------------------------------------
+
+##################################################
+#                                  		       	 #
+#  Вывод основной формы создания нового раздела  #
+#			                  					 #
+##################################################
+sub _inner_weblog_createrazdelpage {
+my $page_ref=$_[2];
+my $weblog_createrazdelpage_date = weblogmodule::_inner_weblog_date_format();
+my $weblog_createrazdelpage_createform = qq~
+    <div class="popup_header">Создание новой записи</div>
+	<div class=standart_text style="margin-left:1"><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblog&amp;page=$page_ref" class=simple_link><b>Записи в блоге</b></a> / Добавление новой записи в блог<br><br></div>
+	<form id="addweblog" method=post ENCTYPE="multipart/form-data" action="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=crnewweblograzdel&amp;page=$page_ref" style="margin:0">
+	<table cellspacing=0 cellpadding=2 border=0 width="100%">\n
+	 <tr><td class=standart_text>ЧПУ страницы <i>(без .html)</i>: <font color="#A0A0A0">[обязательное поле]</font></td></tr>\n
+	 <tr><td class=standart_text><input type=text name=seochpu value="" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Текст для тега <i>&lt;TITLE&gt;&lt;/TITLE&gt;</i>:</td></tr>\n
+	 <tr><td class=standart_text><input type=text name=seotitle value="" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Текст для тега <i>&lt;META name=&quot;description&quot; /&gt;</i>:</td></tr>\n
+	 <tr><td class=standart_text><input type=text name=seometadescr value="" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Текст для тега <i>&lt;META name=&quot;keywords&quot; /&gt;</i>:</td></tr>\n
+	 <tr><td class=standart_text><input type=text name=seometakeys value="" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Дата:</td></tr>\n
+	 <tr><td class=standart_text><input type=text name=date value="$weblog_createrazdelpage_date" class=input style="width:50%"></td></tr>\n
+	 <tr><td class=standart_text>Заголовок записи в блоге: <font color="#A0A0A0">[обязательное поле]</font></td></tr>\n
+	 <tr><td class=standart_text><input type=text name=header value="" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Краткое содержание записи: <font color="#A0A0A0">[обязательное поле]</font></td></tr>\n
+	 <tr><td class=standart_text><textarea name=comment rows=5 cols=5 class=input style="width:100%;height:100"></textarea></td></tr>\n
+	 <tr><td class=standart_text><input type=submit value="Сохранить изменения" class="button" style="width:150"></td></tr>\n
+	</table>
+	</form>
+~;
+return $weblog_createrazdelpage_createform;
+}
+
+#----------------------------------------------------------------------------
+
+
+################################################
+#                                              #
+#  Вывод основной формы редатирования записи   #
+#			                       			   #
+################################################
+
+sub _inner_weblog_editpage {
+ my $information = '';
+ my @file_arr = ();
+ my $skobki_hr = '';
+ my $random = rand();
+ my @weblog_details = ();
+ my $page_ref=$_[3];
+ open (TDDAATFH,"+<conf/system/weblog.tnk");
+ my @indexes = <TDDAATFH>;
+ close(TDDAATFH);
+ if ($#indexes > -1) {
+  foreach(my $kinx=0; $kinx<=$#indexes; $kinx++) 
+    {my @temp_arr = split (/\|/,$indexes[$kinx]);
+    if ($temp_arr[1] eq $_[2]) {@weblog_details = @temp_arr; last;}
+    } 
+
+  $weblog_details[8] =~ s/\<br\>/\n/g;
+  $weblog_details[$#weblog_details] =~ s/[\n]+//g;
+
+  $weblog_editpage_editform .= qq~
+    <div class="popup_header">Редактирование записи в блоге</div>
+	<div class=standart_text style="margin-left:1"><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblog&amp;page=$page_ref" class=simple_link><b>Записи в блоге</b></a> / Редактирование записи «$weblog_details[3]»<br><br></div>
+	<form id="addweblog" method=post ENCTYPE="multipart/form-data" action="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=modweblograzdel&amp;blogmessid=$weblog_details[1]&amp;page=$page_ref" style="margin:0">
+	<table cellspacing=0 cellpadding=2 border=0 width="100%">\n
+	 <tr><td class=standart_text>ЧПУ страницы <i>(без .html)</i>: <font color="#A0A0A0">[обязательное поле]</font></td></tr>\n
+	 <tr><td class=standart_text><input type=text name=seochpu value="$weblog_details[3]" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Текст для тега <i>&lt;TITLE&gt;&lt;/TITLE&gt;</i>:</td></tr>\n
+	 <tr><td class=standart_text><input type=text name=seotitle value="$weblog_details[4]" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Текст для тега <i>&lt;META name=&quot;description&quot; /&gt;</i>:</td></tr>\n
+	 <tr><td class=standart_text><input type=text name=seometadescr value="$weblog_details[5]" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Текст для тега <i>&lt;META name=&quot;keywords&quot; /&gt;</i>:</td></tr>\n
+	 <tr><td class=standart_text><input type=text name=seometakeys value="$weblog_details[6]" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Дата:</td></tr>\n
+	 <tr><td class=standart_text><input type=text name=date value="$weblog_details[2]" class=input style="width:50%">&nbsp;&nbsp;&nbsp;&nbsp;<a href="javascript:Currdate(4);" class="simple_link">Текущая дата</a></td></tr>\n
+	 <tr><td class=standart_text>Заголовок записи в блоге: <font color="#A0A0A0">[обязательное поле]</font></td></tr>\n
+	 <tr><td class=standart_text><input type=text name=header value="$weblog_details[7]" class=input style="width:100%"></td></tr>\n
+	 <tr><td class=standart_text>Краткое содержание записи: <font color="#A0A0A0">[обязательное поле]</font></td></tr>\n
+	 <tr><td class=standart_text><textarea name=comment rows=5 cols=5 class=input style="width:100%;height:100">$weblog_details[8]</textarea></td></tr>\n
+	 <tr><td class=standart_text><input type=submit value="Сохранить изменения" class="button" style="width:150">&nbsp;</td></tr>\n
+	</table>
+	</form>
+   ~;
+  }
+  else {$weblog_editpage_editform .= qq~<p class=error>Список подразделов пуст (\$#indexes = $#indexes)!</p>~;}
+return $weblog_editpage_editform;
+}
+
+#----------------------------------------------------------------------------
+
+
+##########################
+#                        #
+#  Форматированная дата  #
+#						 #
+##########################
+
+sub _inner_weblog_date_format {
+my $date = localtime;
+$date =~ s/[\.\:\,]//g;
+$date =~ s/[\s]+/ /g;
+my @date_array = split (/ /,$date);
+@date_array = ($date_array[2],$date_array[1],$date_array[4]);
+if ($date_array[1] eq 'Jan') {$date_array[1] = 'Январь'}
+if ($date_array[1] eq 'Feb') {$date_array[1] = 'Февраль'}
+if ($date_array[1] eq 'Mar') {$date_array[1] = 'Март'}
+if ($date_array[1] eq 'Apr') {$date_array[1] = 'Апрель'}
+if ($date_array[1] eq 'May') {$date_array[1] = 'Май'}
+if ($date_array[1] eq 'Jun') {$date_array[1] = 'Июнь'}
+if ($date_array[1] eq 'Jul') {$date_array[1] = 'Июль'}
+if ($date_array[1] eq 'Aug') {$date_array[1] = 'Август'}
+if ($date_array[1] eq 'Sep') {$date_array[1] = 'Сентябрь'}
+if ($date_array[1] eq 'Oct') {$date_array[1] = 'Октябрь'}
+if ($date_array[1] eq 'Nov') {$date_array[1] = 'Ноябрь'}
+if ($date_array[1] eq 'Dec') {$date_array[1] = 'Декабрь'}
+
+return "$date_array[0] $date_array[1], $date_array[2]";
+}
+
+#----------------------------------------------------------------------------
+
+#############################
+#                           #
+#  Добавление записи в БД   #
+#			    			#
+#############################
+
+sub _inner_weblog_add {
+if (-e "conf/system/weblog.tnk") {open (TIFH,"+<conf/system/weblog.tnk");}
+    else {open (TIFH,">conf/system/weblog.tnk");}
+ my @indexes = <TIFH>;
+ my $date = weblogmodule::_inner_weblog_date_format();
+ push(@indexes,join("|",@_,0)."\n");
+ seek(TIFH,0,0);
+ flock(TIFH,2);
+ print TIFH @indexes;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH);
+}
+
+#----------------------------------------------------------------------------
+
+############################
+#                          #
+#  Удаление записи из БД   #
+#			   			   #
+############################
+
+sub _inner_weblog_delete {
+ open (TDDAATFH,"+<conf/system/weblog.tnk");
+ my @indexes = <TDDAATFH>;
+ $count = 0;
+ foreach(my $kinx=0; $kinx<=$#indexes;$kinx++) 
+  {my $check = $indexes[$kinx];
+   $check =~ s/[\n]+//g;
+   if ($check ne '') {$count++;}
+  } 
+ if ($count > 1) {
+  for(my $i=0;$i<=$#indexes;$i++)
+    {
+     my @temp_arr = split (/\|/,$indexes[$i]);
+     if ($_[0] eq $temp_arr[1]) 
+	  {
+	   @ostatok=@indexes[$i+1..$#indexes];
+	   @pre_array=@indexes[0..$i-1];
+	   @indexes=(@pre_array,@ostatok);
+	   if (-e "conf/pages/$_[0].txt") {unlink("conf/pages/$_[0].txt");}
+	   last;
+ 	  }
+    }
+  seek(TDDAATFH,0,0);
+  flock(TDDAATFH,2);
+  print TDDAATFH @indexes;
+  truncate(TDDAATFH,tell(TDDAATFH));
+  flock(TDDAATFH,8);
+  close(TDDAATFH);
+ }
+ # $count > 1
+ else {close (TDDAATFH); if ((-e "conf/system/weblog.tnk")) {unlink("conf/system/weblog.tnk");}}
+}
+
+#----------------------------------------------------------------------------
+
+#############################
+#                           #
+#  Изменение записи из БД   #
+#		  	    			#
+#############################
+
+sub _inner_weblog_modify {
+ open (TIFH,"+<conf/system/weblog.tnk");
+ my @indexes = <TIFH>;
+ #my $mod_time = time;
+ #my $date = weblogmodule::_inner_weblog_date_format();
+ for(my $i=0;$i<=$#indexes;$i++)
+  {
+   my @temp_arr = split (/\|/,$indexes[$i]);
+   if ($_[0] eq $temp_arr[1]) 
+	{
+	 my @new_values = @_;
+	 $new_values[0] = $temp_arr[0];
+	 $new_values[0] = $temp_arr[0];
+	 $indexes[$i] = join("|",@new_values,0)."\n";
+	 last;
+	 }
+   }
+ seek(TIFH,0,0);
+ flock(TIFH,2);
+ print TIFH @indexes;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH);
+}
+
+#----------------------------------------------------------------------------
+
+###############################################
+#                           		      	  #
+#  Детализация информации о подразделе из БД  #
+#		  	    		      				  #
+###############################################
+
+sub _inner_weblog_getdetails {
+ open (TIFH,"+<conf/system/weblog.tnk");
+ my @indexes = <TIFH>;
+ my $mod_time = time;
+ my $date = weblogmodule::_inner_weblog_date_format();
+ for(my $i=0;$i<=$#indexes;$i++)
+   {
+   	my @temp_arr = split (/\|/,$indexes[$i]);
+    if ($_[0] eq $temp_arr[1]) {return @temp_arr;}
+   }
+return -1;
+}
+
+#----------------------------------------------------------------------------
+
+################################################
+#                                              #
+#  Получение списка файлов некоторого каталога #
+#			                      			   #
+################################################
+
+sub get_files_array {
+ my $dir = $_[0];
+ $dir =~ s/\\/\//g;
+ opendir DIR,$dir;
+ my @files = grep {(!/^\.+$/) and !(-d "$dir/$_")} readdir DIR;
+ closedir DIR;
+ return @files;
+}
+
+#----------------------------------------------------------------------------
+
+
+################################################################
+#                         				       				   #
+#  Вывод страницы редактирования содержимого подраздела из CMS #
+#			  				       							   #
+################################################################
+
+sub _inner_weblog_podrazdeltextpage {
+
+my $xml_description_file = configmodule::lookup_for_module_xml($MODULE_FOLDER);
+my $module_descr = configmodule::get_config_value($MODULE_FOLDER,$xml_description_file,"description");
+my $weblog_content_variable = qq~<div class=admin_header>$module_descr</div>~;
+
+my $page_ref = $_[3];
+my $podrazdelid = $_[2];
+my $information = '';
+my $page_html = '';
+
+ if ($_[4] == 1) {
+  my $ipdatetime = '';
+  if (localtime =~ /([\d]+:[\d]+:[\d]+)/) {$ipdatetime = "$1:";}
+  $information = "<div class=status>$ipdatetime Информация успешно обновлена!</div><br>\r\n";
+  }
+
+ if (-e "conf/pages/$podrazdelid.txt") {
+  open(PAGEFH,"<conf/pages/$podrazdelid.txt");
+  $page_html = join("",<PAGEFH>);
+  close(PAGEFH);
+  }
+
+ my @weblog_podrazdel_details = weblogmodule::_inner_weblog_getdetails($podrazdelid);
+
+ if ($#weblog_podrazdel_details > -1) {
+  $weblog_content_variable .= qq~
+   <div class=standart_text style="margin-left:1"><a href="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblog&amp;page=$page_ref" class=simple_link><b>Записи в блоге</b></a> / Редактирование содержимого записи «$weblog_podrazdel_details[3]» <i style="color:#808080">(id=$podrazdelid)</i><br><br></div>
+   <!--<p class=standart_text><b>Редактирование содержимого записи «$weblog_podrazdel_details[3]»</b> <i style="color:#808080">(id=$podrazdelid)</i></p>-->
+   $information
+   <form method=post action="$ENV{SCRIPT_NAME}?id=$_[0]&amp;action=admweblogpodrazdelpost&amp;radelid=$podrazdelid&amp;page=$page_ref" ENCTYPE="multipart/form-data" style="margin:0">
+   <textarea id="weblogpodrazdelpostcontent" name="pagecontent" rows=5 cols=5>$page_html</textarea>
+   <script type="text/javascript">
+	CKEDITOR.replace( 'pagecontent' );
+   </script>
+   <input type=hidden name="preview" value="0">
+   <!--<input type=button value="Предварительный просмотр" onclick="javascript:top.document.forms[0].preview.value = '1'; top.document.forms[0].submit();" class=button style=width:180>&nbsp;
+   <input type=button value="Загрузить" onclick="javascript:top.document.forms[0].preview.value = '0'; top.document.forms[0].submit();" class=button style=width:90>
+   <p><input type=submit value="Загрузить содержимое" class=button style=width:200></p>-->
+   </form>
+   ~;
+  }
+  else {$weblog_content_variable = qq~<p class=error>Несуществующая запись id=$podrazdelid, данные не обнаружены!</p>~;}
+ return $weblog_content_variable;
+}
+
+#----------------------------------------------------------------------------
+
+#############################################
+#                         		    		#
+#  Сохранение содержимого подраздела из CMS #
+#			  		    					#
+#############################################
+
+sub _inner_weblog_savepodrazdelcontent {
+my $podrazdelid = $_[1];
+my $content_to_save = $_[0];
+if ($podrazdelid =~ /^[\d]+$/) {
+ open(PAGEFH,">conf/pages/$podrazdelid.txt");
+ print PAGEFH $content_to_save;
+ close(PAGEFH);
+ return 1;
+ }
+return 0;
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------------------+
+#  |                               							|
+#  |  Функция передвижения записи в блоге вверх по списку 	|
+#  |			                   							|
+#  +--------------------------------------------------------+
+
+sub _inner_weblog_sgmoveup {
+
+if (-e "conf/system/weblog.tnk") 
+ { 
+  open (TIFH,"+<conf/system/weblog.tnk");
+  my @cats_page = sort {$b cmp $a} <TIFH>;
+  
+  for(my $i=0; $i<=$#cats_page; $i++) {
+  	my @tmp = split (/\|/,$cats_page[$i]);
+  	#print "<h5>$tmp[0]:$i</h5>";
+  	if ($tmp[0] == $_[0]) {
+  	 my @tmp2 = split (/\|/,$cats_page[$i-1]);
+  	 my $buf = $tmp2[0];
+  	 $tmp2[0]=$tmp[0];
+  	 $tmp[0]=$buf;
+  	 $cats_page[$i-1] = join("|",@tmp2);
+  	 $cats_page[$i] = join("|",@tmp);
+  	 last;	
+  	}
+  }
+ 
+ seek(TIFH,0,0);
+ flock( TIFH,2);
+ print TIFH @cats_page;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH); 
+ }
+}
+
+#----------------------------------------------------------------------------
+
+#  +--------------------------------------------------------+
+#  |                               							|
+#  |  Функция передвижения записи в блоге вниз по списку 	|
+#  |			                   							|
+#  +--------------------------------------------------------+
+
+sub _inner_weblog_sgmovedown {
+
+if (-e "conf/system/weblog.tnk") 
+ { 
+  open (TIFH,"+<conf/system/weblog.tnk");
+  my @cats_page = sort {$b cmp $a} <TIFH>;
+  
+  for(my $i=0; $i<=$#cats_page; $i++) {
+  	my @tmp = split (/\|/,$cats_page[$i]);
+  	#print "<h4>$tmp[0]</h4>";
+  	if ($tmp[0] == $_[0]) {
+  	 my @tmp2 = split (/\|/,$cats_page[$i+1]);
+  	 my $buf = $tmp2[0];
+  	 $tmp2[0]=$tmp[0];
+  	 $tmp[0]=$buf;
+  	 $cats_page[$i+1] = join("|",@tmp2);
+  	 $cats_page[$i] = join("|",@tmp);
+  	 last;	
+  	 
+  	}
+  }
+ seek(TIFH,0,0);
+ flock(TIFH,2);
+ print TIFH @cats_page;
+ truncate(TIFH,tell(TIFH));
+ flock(TIFH,8);
+ close(TIFH); 
+ }
+}
+
+#----------------------------------------------------------------------------
+
+
+End{}
+return 1;

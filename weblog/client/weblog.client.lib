@@ -1,0 +1,235 @@
+﻿package weblogmodule;
+BEGIN {}
+
+my $MODULE_NAME = "weblogmodule";
+
+#----------------------------------------------------------------------------
+
+# +-------------------------------------------------+
+# |		   											|
+# | Получить статус модуля (включен или выключен) 	|
+# |													|
+# +-------------------------------------------------+
+
+sub get_power_status_for_module {
+ my $file_to_parse = "conf/system/install.tnk";
+ if (-e $file_to_parse) 
+  {
+  open(CFGFH,"<$file_to_parse");
+  my @filecontent = <CFGFH>;
+  close(CFGFH);
+  for(my $admplinx = 0; $admplinx <= $#filecontent; $admplinx++)
+   {
+  	my @tmp = split (/\|/,$filecontent[$admplinx]);
+  	if ($tmp[2] eq $MODULE_NAME) {return $tmp[4];}
+   }
+  }
+ return -1;	
+}
+
+#----------------------------------------------------------------------------
+
+# +---------------------------------------------+
+# |		   										|
+# | Проверка существования action для страницы 	|
+# |												|
+# +---------------------------------------------+
+
+sub check_action_for_static_page {
+my $pageaction = $_[0];
+my $pagefileid = 0;
+
+if (-e "conf/system/weblog.tnk")
+ {
+  open(LMENUFH,"<conf/system/weblog.tnk");
+  my @sub_razdels= <LMENUFH>;
+  close LMENUFH;
+  for (my $i = 0; $i <= $#sub_razdels; $i++)
+   {
+   	my @tmp_sr = split (/\|/,$sub_razdels[$i]);
+   	my @sub_sr = split (/\,/,$tmp_sr[3]);
+   	for (my $j = 0; $j <= $#sub_sr; $j++)
+   	 {
+   	  if ($sub_sr[$j] eq $pageaction) {$pagefileid = $tmp_sr[1]; last;}	
+   	 }
+   }
+  if ($pagefileid > 0)
+   {
+   	if (-e "conf/pages/$pagefileid.txt") {;}
+   	else {$pagefileid = 0;}
+   } 
+ }
+
+return $pagefileid;
+}
+
+#----------------------------------------------------------------------------
+
+# +---------------------------------------------+
+# |		   										|
+# | Промежуточная функция вывода записей из CMS 	|
+# |												|
+# +---------------------------------------------+
+
+sub show_weblog_clientpage {
+my $pageaction = $_[0];
+if (-e "conf/config/template.html")
+ {
+ open(FCFH,"<conf/config/template.html");
+ @scheme = <FCFH>;
+ my $cnt = 0;
+ while($cnt<=$#scheme) {
+
+	$scheme[$cnt] = weblogmodule::_inner_weblog_fill_seotags($scheme[$cnt],$pageaction);
+	$scheme[$cnt] = pagesmodule::fill_common_cms_tags($scheme[$cnt],$pageaction);
+
+     if ($scheme[$cnt] =~ /\%content\%/) {my $content = weblogmodule::_inner_weblog_showpage(@_); $scheme[$cnt] =~ s/\%content\%/$content/;}
+    print $scheme[$cnt];
+    $cnt++;
+    }
+ close FCFH;
+ }
+ else {print "<b>$MODULE_NAME:</b> in fuction show_interest_startpage() - conf/config/template.html not found!";}
+}
+
+#----------------------------------------------------------------------------
+
+# +-------------------------------------------------+
+# |		   											|
+# | Промежуточная функция вывода страницы из CMS 	|
+# |													|
+# +-------------------------------------------------+
+
+sub _inner_weblog_showpage {
+my $pageaction = $_[0];
+my $pagefileid = 0;
+my $weblog_content_variable = '';
+my $weblog_status = weblogmodule::get_power_status_for_module($MODULE_NAME);
+
+if ($weblog_status == 0) {
+ if (-e "conf/system/weblog.tnk")
+  {
+   open(LMENUFH,"<conf/system/weblog.tnk");
+   my @sub_razdels= <LMENUFH>;
+   close LMENUFH;
+   for (my $i = 0; $i <= $#sub_razdels; $i++)
+    {
+     my @tmp_sr = split (/\|/,$sub_razdels[$i]);
+     my @sub_sr = split (/\,/,$tmp_sr[3]);
+     for (my $j = 0; $j <= $#sub_sr; $j++)
+   	  {
+   	   if ($sub_sr[$j] eq $pageaction) {$pagefileid = $tmp_sr[1]; last;}	
+   	  }
+   	 #if ($tmp_sr[3] eq $pageaction) {$pagefileid = $tmp_sr[1]; last;}
+    }
+   if ($pagefileid > 0)
+    {
+   	 if (-e "conf/pages/$pagefileid.txt") {
+	   $weblog_content_variable = weblogmodule::_inner_weblog_getcontent($pagefileid);
+      } else {$weblog_content_variable = qq~<p class=error><b>$MODULE_NAME:</b> файл conf/pages/$pagefileid.txt не найден!</p>~;} 
+    } 
+    else {$weblog_content_variable = qq~<p class=error><b>$MODULE_NAME:</b> $pageaction - страница не найдена!</p>~;}
+  }
+  else {$weblog_content_variable = qq~<p class="error"><b>$MODULE_NAME:</b> файл conf/system/weblog.tnk не найден!</p>~;}
+ } 
+ else {$weblog_content_variable = qq~<p class="error"><b>$MODULE_NAME:</b> модуль выключен - содержимое страницы недоступно!</p>~;}
+
+return $weblog_content_variable;
+
+}
+
+#----------------------------------------------------------------------------
+
+# +-------------------------------------------------+
+# |		   											|
+# | Формирование списка разделов для левого меню		|
+# |													|
+# +-------------------------------------------------+
+
+sub _inner_weblog_getleftmenu {
+my $weblog_leftmenu_variable = '';
+if (-e "conf/system/weblog.tnk")
+ {
+  my @leftmenu = ();
+  open(LMENUFH,"<conf/system/weblog.tnk");
+  my @sub_razdels= <LMENUFH>;
+  close LMENUFH;
+  for (my $srinx = 0; $srinx <= $#sub_razdels; $srinx++) {
+   my @tmp_sr = split (/\|/,$sub_razdels[$srinx]);
+   push(@leftmenu,"<a href=\"weblog_$tmp_sr[0].html\" class=lmenu>$tmp_sr[2]</a>")
+   }
+  if ($#leftmenu > -1) {return join("<br>",@leftmenu);}
+ }
+return;
+}
+
+#----------------------------------------------------------------------------
+
+# +-----------------------------------------------------------------+
+# |		   															|
+# | Формирование содежимого страницы с обработкой внешних включений	|
+# |																	|
+# +-----------------------------------------------------------------+
+
+sub _inner_weblog_getcontent {
+my $weblog_content_variable = '';
+my $pagefileidfilename = $_[0];
+
+open(CNTNTFH,"<conf/pages/$pagefileidfilename.txt");
+my @static_page_array = <CNTNTFH>;
+close CNTNTFH;
+
+#for (my $stpginx = 0; $stpginx <= $#static_page_array; $stpginx++) {
+# $static_page_array[$stpginx] = pagesmodule::fill_weblog_tags($static_page_array[$stpginx]);
+# }
+
+$weblog_content_variable = join("",@static_page_array);
+
+return $weblog_content_variable;
+}
+
+#----------------------------------------------------------------------------
+
+# +-----------------------------+
+# |		   						|
+# | Заполнение SEO тегов		|
+# |								|
+# +-----------------------------+
+
+sub _inner_weblog_fill_seotags {
+ my $input = $_[0];
+ my $pageaction = $_[1];
+ my $titletagtext = '';
+ my $metadescrtagtext = '';
+ my $metakeystagtext = '';
+
+ if (-e "conf/system/weblog.tnk")
+  {
+   open(LMENUFH,"<conf/system/weblog.tnk");
+   my @sub_razdels= <LMENUFH>;
+   close LMENUFH;
+   for (my $srinx = 0; $srinx <= $#sub_razdels; $srinx++) {
+    my @tmp_sr = split (/\|/,$sub_razdels[$srinx]);
+    my @sub_sr = split (/\,/,$tmp_sr[3]);
+     for (my $j = 0; $j <= $#sub_sr; $j++)
+   	  {
+   	   if ($sub_sr[$j] eq $pageaction) {
+   	 	$titletagtext = $tmp_sr[4];
+   	 	$metadescrtagtext = $tmp_sr[5];
+   	 	$metakeystagtext = $tmp_sr[6];
+   	 	last;
+     	}	
+   	  }
+    }
+  }
+ 
+ if ($input =~ /\%page_title\%/) {$input =~ s/\%page_title\%/$titletagtext/;} 
+ if ($input =~ /\%metadesc\%/) {$input =~ s/\%metadesc\%/$metadescrtagtext/;}
+ if ($input =~ /\%metakeys\%/) {$input =~ s/\%metakeys\%/$metakeystagtext/;}
+ return $input;
+}
+
+#----------------------------------------------------------------------------
+
+End{}
+return 1;

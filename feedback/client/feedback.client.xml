@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+	<systemtype>0</systemtype>
+    <name>feedbackmodule</name>
+    <menuitem>Обратная связь</menuitem>
+    <description>Управление разделом «Обратная связь»</description>
+    <version>1.4</version>
+    <module_library>libs/modules/feedbackmodule/feedback.client.lib</module_library>
+    <module_include>libs/modules/feedbackmodule/feedback.client.inc</module_include>
+    <startaction>feedback</startaction>
+    <startfunction>feedbackmodule::show_feedback_clientpage();</startfunction>
+    <configuration>
+        <tankfile/>
+        <indexfile/>
+        <datafile/>
+    </configuration>
+</module>
